@@ -1,0 +1,56 @@
+# 整体构建、整体部署。模块的启停通过 ENABLED_MODULES 控制，不需要改镜像。
+# 在 deploy 目录执行：docker compose -p lancha up -d
+name: lancha
+
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lancha}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lancha}
+      POSTGRES_DB: ${POSTGRES_DB:-lancha_ai_studio}
+      TZ: Asia/Shanghai
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/backend.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_HOST: 0.0.0.0
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-lancha}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lancha}
+      POSTGRES_DB: ${POSTGRES_DB:-lancha_ai_studio}
+      # 为空表示加载全部模块；按模块分批上线时在这里指定
+      ENABLED_MODULES: ${ENABLED_MODULES:-}
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/frontend.Dockerfile
+      args:
+        VITE_ENABLED_MODULES: ${VITE_ENABLED_MODULES:-}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  postgres_data:

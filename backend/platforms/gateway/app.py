@@ -1,0 +1,75 @@
+"""应用装配：加载模块 → 注册事件订阅 → 挂载路由 → 启动生命周期钩子。"""
+
+import logging
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from platforms import events, registry
+from platforms.config import Settings, get_settings
+from platforms.contract import ModuleSpec
+from platforms.db import dispose_engine
+from platforms.gateway.api import router as platform_router
+from platforms.gateway.errors import register_error_handlers
+from platforms.gateway.loader import load_modules
+from platforms.gateway.middleware import request_context
+
+logger = logging.getLogger("platform.gateway")
+
+
+def _lifespan(modules: list[ModuleSpec]):
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        started: list[ModuleSpec] = []
+        try:
+            for spec in modules:
+                if spec.on_startup:
+                    await spec.on_startup()
+                started.append(spec)
+                logger.info("模块已启动：%s", spec.name)
+            yield
+        finally:
+            for spec in reversed(started):
+                if spec.on_shutdown:
+                    await spec.on_shutdown()
+            await dispose_engine()
+
+    return lifespan
+
+
+def create_app(settings: Settings | None = None, package: str = "modules") -> FastAPI:
+    settings = settings or get_settings()
+    modules = load_modules(settings.enabled_modules, package)
+    registry.register(modules)
+
+    events.clear()
+    for spec in modules:
+        for event, handlers in spec.subscriptions.items():
+            for handler in handlers:
+                events.subscribe(event, handler)
+
+    app = FastAPI(title="lancha-ai-studio", lifespan=_lifespan(modules))
+
+    # add_middleware 后添加的在外层：CORS 放最外层，错误响应也能带上跨域头
+    app.middleware("http")(request_context)
+    if settings.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+    register_error_handlers(app)
+
+    @app.get("/health", tags=["platform"])
+    async def health():
+        return {"status": "ok", "modules": [spec.name for spec in modules]}
+
+    app.include_router(platform_router, prefix="/api/platform", tags=["platform"])
+    for spec in modules:
+        if spec.router is not None:
+            app.include_router(spec.router, prefix=f"/api/{spec.name}", tags=[spec.name])
+
+    return app

@@ -1,0 +1,8 @@
+export { defineModule } from './module'
+export type { AppModule, ShellContext } from './module'
+export { permission } from './permission'
+export { usePlatformStore } from './platform'
+export type { MenuNode } from './platform'
+export { request } from './request'
+export type { ApiError } from './request'
+export type { MenuInfo, ModuleInfo, PlatformProfile } from './types'

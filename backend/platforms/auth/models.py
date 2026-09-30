@@ -1,0 +1,76 @@
+"""RBAC 表，全部建在 platform schema 下。
+
+app_user 只存身份标识，不存任何凭证——密码、token、第三方账号绑定属于认证体系，不在本框架范围内。
+接入认证后，只需把认证系统的用户映射到 app_user.id。
+"""
+
+from datetime import datetime
+
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column
+
+from platforms.db import PLATFORM_SCHEMA, Base
+
+
+class TimestampMixin:
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class AppUser(TimestampMixin, Base):
+    __tablename__ = "app_user"
+    __table_args__ = {"schema": PLATFORM_SCHEMA}
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True)
+    display_name: Mapped[str] = mapped_column(String(64), default="")
+    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)   # 跳过所有权限校验
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class Role(TimestampMixin, Base):
+    __tablename__ = "role"
+    __table_args__ = {"schema": PLATFORM_SCHEMA}
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(64), unique=True)
+    name: Mapped[str] = mapped_column(String(64))
+    description: Mapped[str] = mapped_column(String(255), default="")
+
+
+class Permission(Base):
+    """权限点由各模块 module.py 声明，用 scripts/sync_permissions.py 同步到这张表。"""
+
+    __tablename__ = "permission"
+    __table_args__ = {"schema": PLATFORM_SCHEMA}
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(128), unique=True)
+    name: Mapped[str] = mapped_column(String(64))
+    module: Mapped[str] = mapped_column(String(64), index=True)
+
+
+class UserRole(Base):
+    __tablename__ = "user_role"
+    __table_args__ = (
+        UniqueConstraint("user_id", "role_id", name="uq_user_role"),
+        {"schema": PLATFORM_SCHEMA},
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey(f"{PLATFORM_SCHEMA}.app_user.id", ondelete="CASCADE"))
+    role_id: Mapped[int] = mapped_column(ForeignKey(f"{PLATFORM_SCHEMA}.role.id", ondelete="CASCADE"))
+
+
+class RolePermission(Base):
+    __tablename__ = "role_permission"
+    __table_args__ = (
+        UniqueConstraint("role_id", "permission_id", name="uq_role_permission"),
+        {"schema": PLATFORM_SCHEMA},
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    role_id: Mapped[int] = mapped_column(ForeignKey(f"{PLATFORM_SCHEMA}.role.id", ondelete="CASCADE"))
+    permission_id: Mapped[int] = mapped_column(ForeignKey(f"{PLATFORM_SCHEMA}.permission.id", ondelete="CASCADE"))

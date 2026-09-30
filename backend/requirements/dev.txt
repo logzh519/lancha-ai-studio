@@ -1,0 +1,7 @@
+# 本地开发与测试：pip install -r requirements/dev.txt
+-r base.txt
+
+pytest == 9.1.1
+pytest-asyncio == 1.4.0
+httpx == 0.28.1
+ruff >= 0.9

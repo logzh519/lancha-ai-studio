@@ -1,0 +1,31 @@
+/* 全局主题变量。模块只能使用这些变量，不能覆盖全局样式；模块内组件一律用 <style scoped>。
+   接入 UI 组件库（Element Plus / Naive UI 等）时，在 shared/ui 里做二次封装后再给模块用。 */
+
+:root {
+  --color-bg: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-border: #e3e6eb;
+  --color-text: #1f2329;
+  --color-text-weak: #8a8f99;
+  --color-primary: #2563eb;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --radius: 6px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}

@@ -1,0 +1,9 @@
+# 平台公共依赖；模块独有的依赖写在 modules/<模块名>/requirements.txt
+fastapi >= 0.120
+uvicorn >= 0.35
+pydantic-settings == 2.15.0
+python-dotenv == 1.2.3
+
+sqlalchemy[asyncio] >= 2.1
+psycopg[binary] >= 3.3
+alembic >= 1.20
