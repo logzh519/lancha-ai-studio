@@ -91,6 +91,20 @@ async def test_cannot_deactivate_self(client, session):
 async def test_deactivated_user_loses_access(client, session):
     admin = await _user(session, "admin4", superuser=True)
     target = await _user(session, "target4")
+    role = await _role(session, "user_viewer4")
+    permission = Permission(code="platform:user:view", name="查看用户", module="platform")
+    session.add(permission)
+    await session.flush()
+    session.add_all(
+        [
+            RolePermission(role_id=role.id, permission_id=permission.id),
+            UserRole(user_id=target.id, role_id=role.id),
+        ]
+    )
+    await session.flush()
+
+    # 停用前必须有权限，否则 403 与是否停用无关，测不出差异
+    assert (await client.get("/api/platform/users", headers=_as(target))).status_code == 200
 
     await client.patch(f"/api/platform/users/{target.id}/active", json={"is_active": False}, headers=_as(admin))
 
