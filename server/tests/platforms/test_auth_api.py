@@ -161,10 +161,9 @@ async def test_logout_clears_session(client, session):
     old_cookie = login.cookies.get(SESSION_COOKIE)
 
     assert (await client.post("/api/platform/auth/logout")).status_code == 204
-    # 响应会删 cookie，客户端 cookie 罐不可靠；用旧 token 证明服务端已撤销会话。
-    assert (
-        await client.get("/api/platform/auth/me", cookies={SESSION_COOKIE: old_cookie})
-    ).status_code == 401
+    # 响应会删 cookie，客户端 cookie 罐不可靠；手动塞回旧 token 证明服务端已撤销会话。
+    client.cookies.set(SESSION_COOKIE, old_cookie)
+    assert (await client.get("/api/platform/auth/me")).status_code == 401
     assert (await session.execute(select(UserSession))).scalars().all() == []
 
 
@@ -179,7 +178,6 @@ async def test_logout_only_revokes_current_device_session(client, session):
     other_device_token = await issue(session, user.id, timedelta(days=7))
 
     assert (await client.post("/api/platform/auth/logout")).status_code == 204
-    assert (
-        await client.get("/api/platform/auth/me", cookies={SESSION_COOKIE: other_device_token})
-    ).status_code == 200
+    client.cookies.set(SESSION_COOKIE, other_device_token)
+    assert (await client.get("/api/platform/auth/me")).status_code == 200
     assert len((await session.execute(select(UserSession))).scalars().all()) == 1
