@@ -46,7 +46,7 @@ export function createAppRouter(modules: AppModule[]) {
       return session.user ? { path: '/' } : true
     }
     if (!session.user) {
-      return { name: 'login', query: { redirect: to.fullPath } }
+      return { name: 'login' }
     }
 
     const store = usePlatformStore()

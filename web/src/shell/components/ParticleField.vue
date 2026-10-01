@@ -103,12 +103,13 @@ onMounted(() => {
   draw()
   window.addEventListener('resize', resize)
   window.addEventListener('pointermove', onPointerMove, { passive: true })
-  window.addEventListener('pointerleave', onPointerLeave)
+  // pointerleave 不冒泡，且 window 不是指针离开视口时的事件目标，绑在 window 上收不到；必须绑 documentElement
+  document.documentElement.addEventListener('pointerleave', onPointerLeave)
   cleanup = () => {
     window.cancelAnimationFrame(frame)
     window.removeEventListener('resize', resize)
     window.removeEventListener('pointermove', onPointerMove)
-    window.removeEventListener('pointerleave', onPointerLeave)
+    document.documentElement.removeEventListener('pointerleave', onPointerLeave)
   }
 })
 

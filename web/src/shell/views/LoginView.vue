@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useSessionStore } from '@shared/core'
+import { request, useSessionStore } from '@shared/core'
 import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
@@ -8,15 +8,20 @@ import ParticleField from '../components/ParticleField.vue'
 const session = useSessionStore()
 const route = useRoute()
 const error = ref((route.query.error as string) ?? '')
-const feishuConfigured = ref(true)
+// 三态：检测中 / 已配置 / 未配置；请求本身失败单独用 configFailed 表示，避免把“后端挂了”说成“没配置”
+const feishuConfigured = ref(false)
+const checking = ref(true)
+const configFailed = ref(false)
 const starting = ref(false)
 
 onMounted(async () => {
   try {
-    const config = await fetch('/api/platform/auth/config').then((r) => r.json())
+    const config = await request<{ feishu_configured: boolean }>('/platform/auth/config')
     feishuConfigured.value = config.feishu_configured
   } catch {
-    feishuConfigured.value = false
+    configFailed.value = true
+  } finally {
+    checking.value = false
   }
 })
 
@@ -48,7 +53,8 @@ async function login(): Promise<void> {
       <button type="button" :disabled="starting || !feishuConfigured" @click="login">
         {{ starting ? '正在打开飞书…' : '飞书登录' }}
       </button>
-      <p v-if="!feishuConfigured" class="notice">后端尚未配置飞书应用，请联系管理员。</p>
+      <p v-if="configFailed" class="notice">无法连接后端服务，请确认后端已启动后刷新页面。</p>
+      <p v-else-if="!checking && !feishuConfigured" class="notice">后端尚未配置飞书应用，请联系管理员。</p>
       <p v-if="error" class="notice">{{ error }}</p>
     </section>
   </main>
