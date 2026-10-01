@@ -2,7 +2,7 @@
 
 模块路由写相对路径，这里统一加上 /<模块名> 前缀，保证前端路由和后端菜单 path 天然对齐。 */
 
-import { usePlatformStore } from '@shared/core'
+import { usePlatformStore, useSessionStore } from '@shared/core'
 import type { AppModule } from '@shared/core'
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
@@ -29,6 +29,7 @@ export function createAppRouter(modules: AppModule[]) {
   const router = createRouter({
     history: createWebHistory(),
     routes: [
+      { path: '/login', name: 'login', component: () => import('./views/LoginView.vue') },
       { path: '/', component: AppLayout, children },
       { path: '/403', name: 'forbidden', component: () => import('./views/ForbiddenView.vue') },
       { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('./views/NotFoundView.vue') },
@@ -36,9 +37,20 @@ export function createAppRouter(modules: AppModule[]) {
   })
 
   router.beforeEach(async (to) => {
+    const session = useSessionStore()
+    if (!session.loaded) {
+      // 后端没起时不阻塞登录页，其余页面按未登录处理
+      await session.load().catch(() => undefined)
+    }
+    if (to.name === 'login') {
+      return session.user ? { path: '/' } : true
+    }
+    if (!session.user) {
+      return { name: 'login', query: { redirect: to.fullPath } }
+    }
+
     const store = usePlatformStore()
     if (!store.loaded) {
-      // 后端没起时不阻塞页面，菜单为空，具体接口各自报错
       await store.load().catch(() => undefined)
     }
     const code = to.meta.permission as string | undefined
