@@ -1,7 +1,7 @@
-"""RBAC 表，全部建在 platform schema 下。
+"""RBAC 与会话表，全部建在 platform schema 下。
 
-app_user 只存身份标识，不存任何凭证——密码、token、第三方账号绑定属于认证体系，不在本框架范围内。
-接入认证后，只需把认证系统的用户映射到 app_user.id。
+app_user 只存身份标识，不存任何凭证：第三方账号绑定在 user_identity，会话在 user_session，
+两者都只认 app_user.id。换登录方式时只动这两张表的写入方，RBAC 部分不受影响。
 """
 
 from datetime import datetime

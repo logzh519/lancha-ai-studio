@@ -1,8 +1,9 @@
 """当前请求的主体。
 
-本框架不实现认证。默认实现从 X-User-Id 请求头取用户，仅供本地开发和自测使用，
-生产环境必须在启动时调用 set_principal_provider() 换成真实实现（JWT / Session / 网关透传等）。
-替换后平台和模块代码不用改，因为大家都只依赖 current_principal。
+AUTH_MODE=dev_header 时从 X-User-Id 请求头取用户，仅供本地开发和自测使用；
+AUTH_MODE=feishu 时由 create_app() 调 set_principal_provider() 装上基于会话 cookie 的实现。
+换别的认证方式（JWT / 网关透传等）也走同一个钩子，平台和模块代码不用改，
+因为大家都只依赖 current_principal。
 """
 
 from collections.abc import Awaitable, Callable
