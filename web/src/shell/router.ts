@@ -23,6 +23,18 @@ function prefixRoutes(module: AppModule): RouteRecordRaw[] {
 export function createAppRouter(modules: AppModule[]) {
   const children: RouteRecordRaw[] = [
     { path: '', name: 'home', component: () => import('./views/HomeView.vue') },
+    {
+      path: 'platform/users',
+      name: 'platform/users',
+      component: () => import('./views/UsersView.vue'),
+      meta: { permission: 'platform:user:view' },
+    },
+    {
+      path: 'platform/roles',
+      name: 'platform/roles',
+      component: () => import('./views/RolesView.vue'),
+      meta: { permission: 'platform:role:view' },
+    },
     ...modules.flatMap(prefixRoutes),
   ]
 

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { usePlatformStore } from '@shared/core'
+import { usePlatformStore, useSessionStore } from '@shared/core'
 
 const platform = usePlatformStore()
+const session = useSessionStore()
 </script>
 
 <template>
@@ -9,18 +10,35 @@ const platform = usePlatformStore()
     <aside class="sider">
       <div class="brand">lancha-ai-studio</div>
       <nav>
-        <p v-if="platform.menuTree.length === 0" class="empty">暂无可见菜单</p>
+        <p v-if="platform.menuTree.length === 0 && platform.platformMenus.length === 0" class="empty">
+          暂无可见菜单
+        </p>
         <section v-for="group in platform.menuTree" :key="group.path" class="group">
           <h3>{{ group.title }}</h3>
           <RouterLink v-for="menu in group.children" :key="menu.path" :to="menu.path" class="item">
             {{ menu.title }}
           </RouterLink>
         </section>
+        <section v-if="platform.platformMenus.length > 0" class="group">
+          <h3>系统管理</h3>
+          <RouterLink v-for="menu in platform.platformMenus" :key="menu.path" :to="menu.path" class="item">
+            {{ menu.title }}
+          </RouterLink>
+        </section>
       </nav>
     </aside>
-    <main class="content">
-      <RouterView />
-    </main>
+    <div class="main">
+      <header class="topbar">
+        <span v-if="session.user" class="who">
+          <img v-if="session.user.avatar_url" :src="session.user.avatar_url" alt="" />
+          {{ session.user.display_name || session.user.username }}
+        </span>
+        <button type="button" @click="session.logout()">退出登录</button>
+      </header>
+      <main class="content">
+        <RouterView />
+      </main>
+    </div>
   </div>
 </template>
 
@@ -71,5 +89,44 @@ const platform = usePlatformStore()
 .content {
   flex: 1;
   padding: var(--space-lg);
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-md);
+  height: 52px;
+  padding: 0 var(--space-lg);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.who {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 14px;
+}
+
+.who img {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+}
+
+.topbar button {
+  padding: 5px var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  cursor: pointer;
 }
 </style>
