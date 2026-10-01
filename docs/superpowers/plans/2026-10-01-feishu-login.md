@@ -1225,8 +1225,8 @@ from sqlalchemy import select
 from platforms.auth import oauth_state
 from platforms.auth.api import build_feishu_client
 from platforms.auth.feishu.client import FeishuClient
-from platforms.auth.models import AppUser
-from platforms.auth.session import SESSION_COOKIE
+from platforms.auth.models import AppUser, UserSession
+from platforms.auth.session import SESSION_COOKIE, issue
 from platforms.config import Settings
 from platforms.db import get_session
 from platforms.gateway.app import create_app
@@ -1368,14 +1368,37 @@ async def test_me_returns_profile_after_login(client, session):
 
 async def test_logout_clears_session(client, session):
     raw_state = await oauth_state.create(session, timedelta(minutes=10))
+    login = await client.get(
+        "/api/platform/auth/feishu/callback",
+        params={"code": "the-code", "state": raw_state},
+        follow_redirects=False,
+    )
+    old_cookie = login.cookies.get(SESSION_COOKIE)
+
+    assert (await client.post("/api/platform/auth/logout")).status_code == 204
+
+    # 响应里的 Set-Cookie 删除会清空 httpx 的 cookie 罐，光看 /me 是 401 证明不了服务端真的撤销了，
+    # 所以把旧 token 塞回去再问一次。
+    client.cookies.set(SESSION_COOKIE, old_cookie)
+    assert (await client.get("/api/platform/auth/me")).status_code == 401
+    assert (await session.execute(select(UserSession))).scalars().all() == []
+
+
+async def test_logout_only_revokes_current_device_session(client, session):
+    raw_state = await oauth_state.create(session, timedelta(minutes=10))
     await client.get(
         "/api/platform/auth/feishu/callback",
         params={"code": "the-code", "state": raw_state},
         follow_redirects=False,
     )
+    user = (await session.execute(select(AppUser))).scalars().one()
+    other_device_token = await issue(session, user.id, timedelta(days=1))
 
-    assert (await client.post("/api/platform/auth/logout")).status_code == 204
-    assert (await client.get("/api/platform/auth/me")).status_code == 401
+    await client.post("/api/platform/auth/logout")
+
+    client.cookies.set(SESSION_COOKIE, other_device_token)
+    assert (await client.get("/api/platform/auth/me")).status_code == 200
+    assert len((await session.execute(select(UserSession))).scalars().all()) == 1
 ```
 
 - [ ] **Step 2: 运行测试确认失败**
@@ -1397,16 +1420,16 @@ Expected: FAIL，`ModuleNotFoundError: No module named 'platforms.auth.api'`
 from datetime import timedelta
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from platforms.auth import identity, oauth_state
 from platforms.auth.feishu.client import FeishuClient, FeishuError
-from platforms.auth.models import AppUser, UserIdentity, UserSession
+from platforms.auth.models import AppUser, UserIdentity
 from platforms.auth.principal import Principal, current_principal
-from platforms.auth.session import SESSION_COOKIE, issue
+from platforms.auth.session import SESSION_COOKIE, issue, revoke
 from platforms.config import Settings, get_settings
 from platforms.db import get_session
 
@@ -1509,14 +1532,14 @@ async def me(
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
+    request: Request,
     response: Response,
     principal: Principal = Depends(current_principal),
     session: AsyncSession = Depends(get_session),
 ):
-    # 这里拿不到原始 token（provider 已经把它换成 Principal 了），按用户清掉全部会话，
-    # 行为上等价于「登出当前账号的所有设备」，对内部系统是可接受的。
+    # 只撤销 cookie 对应的那一条会话：在笔记本上点退出，不该把用户手机上的登录也静默踢掉。
     if not principal.is_anonymous:
-        await session.execute(delete(UserSession).where(UserSession.user_id == principal.user_id))
+        await revoke(session, request.cookies.get(SESSION_COOKIE, ""))
     response.delete_cookie(SESSION_COOKIE, path="/")
 ```
 
