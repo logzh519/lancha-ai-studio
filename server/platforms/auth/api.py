@@ -1,0 +1,130 @@
+"""认证路由，挂在 /api/platform/auth 下。
+
+回调是浏览器直接访问的地址，所以成功与失败都用 302 跳回前端，不返回 JSON——
+用户看到的应该是登录页上的一句中文，而不是一屏报文。
+"""
+
+from datetime import timedelta
+from urllib.parse import quote
+
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi.responses import RedirectResponse
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from platforms.auth import identity, oauth_state
+from platforms.auth.feishu.client import FeishuClient, FeishuError
+from platforms.auth.models import AppUser, UserIdentity, UserSession
+from platforms.auth.principal import Principal, current_principal
+from platforms.auth.session import SESSION_COOKIE, issue
+from platforms.config import Settings, get_settings
+from platforms.db import get_session
+
+router = APIRouter()
+
+STATE_TTL = timedelta(minutes=10)
+
+
+def build_feishu_client(settings: Settings = Depends(get_settings)) -> FeishuClient:
+    return FeishuClient(app_id=settings.feishu_app_id, app_secret=settings.feishu_app_secret)
+
+
+@router.get("/config")
+async def auth_config(settings: Settings = Depends(get_settings)):
+    """前端据此决定登录页上要不要显示飞书按钮。"""
+    return {"feishu_configured": bool(settings.feishu_app_id and settings.feishu_redirect_uri)}
+
+
+@router.post("/feishu/login-url")
+async def feishu_login_url(
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+    feishu: FeishuClient = Depends(build_feishu_client),
+):
+    state = await oauth_state.create(session, STATE_TTL)
+    return {
+        "authorize_url": feishu.authorize_url(settings.feishu_redirect_uri, state, settings.feishu_scope),
+        "expires_in": int(STATE_TTL.total_seconds()),
+    }
+
+
+@router.get("/feishu/callback")
+async def feishu_callback(
+    code: str = "",
+    state: str = "",
+    error: str = "",
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+    feishu: FeishuClient = Depends(build_feishu_client),
+):
+    def failed(message: str) -> RedirectResponse:
+        return RedirectResponse(f"{settings.frontend_base_url}/login?error={quote(message)}", status_code=302)
+
+    if not await oauth_state.consume(session, state):
+        return failed("飞书登录状态无效或已过期，请重新登录。")
+    if error:
+        return failed("用户取消或拒绝了飞书授权。")
+    if not code:
+        return failed("飞书回调缺少授权码。")
+
+    try:
+        token = await feishu.exchange(code, settings.feishu_redirect_uri)
+        profile = await feishu.user_info(token)
+    except FeishuError as exc:
+        return failed(str(exc))
+
+    user = await identity.upsert(session, profile)
+    if not user.is_active:
+        # 不拦的话会签发一个永远解析不出身份的 cookie，用户只会被静默弹回登录页，
+        # 完全看不出自己是被停用了。
+        return failed("账号已被停用，请联系管理员。")
+    raw = await issue(session, user.id, timedelta(days=settings.session_ttl_days))
+
+    response = RedirectResponse(f"{settings.frontend_base_url}/", status_code=302)
+    response.set_cookie(
+        SESSION_COOKIE,
+        raw,
+        max_age=settings.session_ttl_days * 24 * 3600,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+        path="/",
+    )
+    return response
+
+
+@router.get("/me")
+async def me(
+    principal: Principal = Depends(current_principal),
+    session: AsyncSession = Depends(get_session),
+):
+    if principal.is_anonymous:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "请先登录。")
+    stmt = (
+        select(AppUser.id, AppUser.username, AppUser.display_name, AppUser.is_superuser, UserIdentity.avatar_url)
+        .outerjoin(UserIdentity, UserIdentity.user_id == AppUser.id)
+        .where(AppUser.id == principal.user_id)
+    )
+    row = (await session.execute(stmt)).first()
+    if row is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "请先登录。")
+    return {
+        "id": row.id,
+        "username": row.username,
+        "display_name": row.display_name,
+        "avatar_url": row.avatar_url or "",
+        "superuser": row.is_superuser,
+    }
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(
+    response: Response,
+    principal: Principal = Depends(current_principal),
+    session: AsyncSession = Depends(get_session),
+):
+    # 这里拿不到原始 token（provider 已经把它换成 Principal 了），按用户清掉全部会话，
+    # 行为上等价于「登出当前账号的所有设备」，对内部系统是可接受的。
+    if not principal.is_anonymous:
+        await session.execute(delete(UserSession).where(UserSession.user_id == principal.user_id))
+    response.delete_cookie(SESSION_COOKIE, path="/")

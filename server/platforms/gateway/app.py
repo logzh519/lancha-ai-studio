@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from platforms import events, registry
+from platforms.auth.api import router as auth_router
 from platforms.auth.principal import session_provider, set_principal_provider
 from platforms.config import Settings, get_settings
 from platforms.contract import ModuleSpec
@@ -83,6 +84,7 @@ def create_app(settings: Settings | None = None, package: str = "modules") -> Fa
         return {"status": "ok", "modules": [spec.name for spec in modules]}
 
     app.include_router(platform_router, prefix="/api/platform", tags=["platform"])
+    app.include_router(auth_router, prefix="/api/platform/auth", tags=["platform"])
     for spec in modules:
         if spec.router is not None:
             app.include_router(spec.router, prefix=f"/api/{spec.name}", tags=[spec.name])
