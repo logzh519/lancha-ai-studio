@@ -15,4 +15,9 @@ def loaded_modules() -> tuple[ModuleSpec, ...]:
 
 
 def all_permissions() -> tuple[PermissionDef, ...]:
-    return tuple(permission for spec in _specs for permission in spec.permissions)
+    """平台权限码也要进来，否则 sync_permissions 会把它们当成废弃权限删掉。"""
+    from platforms.auth.permissions import PLATFORM_PERMISSIONS
+
+    return PLATFORM_PERMISSIONS + tuple(
+        permission for spec in _specs for permission in spec.permissions
+    )

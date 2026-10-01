@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from platforms import registry
 from platforms.auth import service
+from platforms.auth.permissions import PLATFORM_MENUS
 from platforms.auth.principal import Principal, current_principal
 from platforms.db import get_session
 
@@ -42,8 +43,22 @@ async def list_modules(
         ]
         modules.append({"name": spec.name, "title": spec.title, "version": spec.version, "menus": menus})
 
+    platform_menus = [
+        {
+            "title": menu.title,
+            "path": menu.path,
+            "icon": menu.icon,
+            "order": menu.order,
+            "parent": menu.parent,
+            "permission": menu.permission,
+        }
+        for menu in sorted(PLATFORM_MENUS, key=lambda m: (m.order, m.path))
+        if visible(menu.permission)
+    ]
+
     return {
         "modules": modules,
+        "platform_menus": platform_menus,
         "permissions": sorted({p.code for p in registry.all_permissions()} if superuser else codes),
         "superuser": superuser,
     }
