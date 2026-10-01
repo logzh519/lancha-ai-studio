@@ -1330,6 +1330,22 @@ async def test_callback_with_authorization_error_redirects_to_login(client):
     assert response.headers["location"].startswith("https://app.test/login?error=")
 
 
+async def test_callback_refuses_deactivated_user(client, session):
+    session.add(AppUser(username="zhang.san@lancha.com", is_superuser=False, is_active=False))
+    await session.flush()
+    raw_state = await oauth_state.create(session, timedelta(minutes=10))
+
+    response = await client.get(
+        "/api/platform/auth/feishu/callback",
+        params={"code": "the-code", "state": raw_state},
+        follow_redirects=False,
+    )
+
+    assert response.headers["location"].startswith("https://app.test/login?error=")
+    assert response.cookies.get(SESSION_COOKIE) is None
+    assert (await session.execute(select(UserSession))).scalars().all() == []
+
+
 async def test_me_requires_login(client):
     assert (await client.get("/api/platform/auth/me")).status_code == 401
 
@@ -1448,6 +1464,10 @@ async def feishu_callback(
         return failed(str(exc))
 
     user = await identity.upsert(session, profile)
+    if not user.is_active:
+        # 不拦的话会签发一个永远解析不出身份的 cookie，用户只会被静默弹回登录页，
+        # 完全看不出自己是被停用了。
+        return failed("账号已被停用，请联系管理员。")
     raw = await issue(session, user.id, timedelta(days=settings.session_ttl_days))
 
     response = RedirectResponse(f"{settings.frontend_base_url}/", status_code=302)
