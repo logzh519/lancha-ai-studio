@@ -11,7 +11,7 @@ from platforms.auth import oauth_state
 from platforms.auth.api import build_feishu_client
 from platforms.auth.feishu.client import FeishuClient
 from platforms.auth.models import AppUser, UserSession
-from platforms.auth.session import SESSION_COOKIE
+from platforms.auth.session import SESSION_COOKIE, issue
 from platforms.config import Settings
 from platforms.db import get_session
 from platforms.gateway.app import create_app
@@ -153,11 +153,33 @@ async def test_me_returns_profile_after_login(client, session):
 
 async def test_logout_clears_session(client, session):
     raw_state = await oauth_state.create(session, timedelta(minutes=10))
+    login = await client.get(
+        "/api/platform/auth/feishu/callback",
+        params={"code": "the-code", "state": raw_state},
+        follow_redirects=False,
+    )
+    old_cookie = login.cookies.get(SESSION_COOKIE)
+
+    assert (await client.post("/api/platform/auth/logout")).status_code == 204
+    # 响应会删 cookie，客户端 cookie 罐不可靠；用旧 token 证明服务端已撤销会话。
+    assert (
+        await client.get("/api/platform/auth/me", cookies={SESSION_COOKIE: old_cookie})
+    ).status_code == 401
+    assert (await session.execute(select(UserSession))).scalars().all() == []
+
+
+async def test_logout_only_revokes_current_device_session(client, session):
+    raw_state = await oauth_state.create(session, timedelta(minutes=10))
     await client.get(
         "/api/platform/auth/feishu/callback",
         params={"code": "the-code", "state": raw_state},
         follow_redirects=False,
     )
+    user = (await session.execute(select(AppUser))).scalars().one()
+    other_device_token = await issue(session, user.id, timedelta(days=7))
 
     assert (await client.post("/api/platform/auth/logout")).status_code == 204
-    assert (await client.get("/api/platform/auth/me")).status_code == 401
+    assert (
+        await client.get("/api/platform/auth/me", cookies={SESSION_COOKIE: other_device_token})
+    ).status_code == 200
+    assert len((await session.execute(select(UserSession))).scalars().all()) == 1

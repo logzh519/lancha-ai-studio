@@ -7,16 +7,16 @@
 from datetime import timedelta
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from platforms.auth import identity, oauth_state
 from platforms.auth.feishu.client import FeishuClient, FeishuError
-from platforms.auth.models import AppUser, UserIdentity, UserSession
+from platforms.auth.models import AppUser, UserIdentity
 from platforms.auth.principal import Principal, current_principal
-from platforms.auth.session import SESSION_COOKIE, issue
+from platforms.auth.session import SESSION_COOKIE, issue, revoke
 from platforms.config import Settings, get_settings
 from platforms.db import get_session
 
@@ -119,12 +119,12 @@ async def me(
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
+    request: Request,
     response: Response,
     principal: Principal = Depends(current_principal),
     session: AsyncSession = Depends(get_session),
 ):
-    # 这里拿不到原始 token（provider 已经把它换成 Principal 了），按用户清掉全部会话，
-    # 行为上等价于「登出当前账号的所有设备」，对内部系统是可接受的。
+    # 用户在一台设备上登出，不应把其它设备上的会话一并作废；原始 token 仍在 cookie 里。
     if not principal.is_anonymous:
-        await session.execute(delete(UserSession).where(UserSession.user_id == principal.user_id))
+        await revoke(session, request.cookies.get(SESSION_COOKIE, ""))
     response.delete_cookie(SESSION_COOKIE, path="/")
