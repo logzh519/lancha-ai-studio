@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { usePlatformStore } from '@shared/core'
+import { usePlatformStore, type ApiError } from '@shared/core'
 import { computed, onMounted, ref } from 'vue'
 
 import { listRoles, listUsers, setUserActive, setUserRoles, type ManagedRole, type ManagedUser } from '../api/platform'
@@ -9,26 +9,44 @@ const canManage = computed(() => platform.has('platform:user:manage'))
 const users = ref<ManagedUser[]>([])
 const roles = ref<ManagedRole[]>([])
 const error = ref('')
+const rolesNotice = ref('')
+// 角色保存期间全局禁用复选框：后端是整体替换，并发提交会丢更新
+const savingRoles = ref(false)
 
 async function refresh(): Promise<void> {
-  try {
-    ;[users.value, roles.value] = await Promise.all([listUsers(), listRoles()])
+  // 用户列表是页面核心；角色列表需要另一项权限，失败不能拖垮用户表格，故分开容错
+  const [usersResult, rolesResult] = await Promise.allSettled([listUsers(), listRoles()])
+  if (usersResult.status === 'fulfilled') {
+    users.value = usersResult.value
     error.value = ''
-  } catch (e) {
-    error.value = (e as Error).message
+  } else {
+    error.value = (usersResult.reason as Error).message
+  }
+  if (rolesResult.status === 'fulfilled') {
+    roles.value = rolesResult.value
+    rolesNotice.value = ''
+  } else {
+    roles.value = []
+    const reason = rolesResult.reason as ApiError
+    rolesNotice.value =
+      reason.status === 403 ? '无权查看角色列表，无法分配角色' : `角色列表加载失败，无法分配角色：${reason.message}`
   }
 }
 
 async function toggleRole(user: ManagedUser, roleId: number): Promise<void> {
-  const next = user.role_ids.includes(roleId)
-    ? user.role_ids.filter((id) => id !== roleId)
-    : [...user.role_ids, roleId]
+  const previous = user.role_ids
+  const next = previous.includes(roleId) ? previous.filter((id) => id !== roleId) : [...previous, roleId]
+  // 乐观更新：先让状态与已被浏览器翻转的 DOM 一致，失败再回滚（换引用以确保触发重渲染）
+  user.role_ids = next
+  savingRoles.value = true
   try {
     await setUserRoles(user.id, next)
-    user.role_ids = next
     error.value = ''
   } catch (e) {
+    user.role_ids = [...previous]
     error.value = (e as Error).message
+  } finally {
+    savingRoles.value = false
   }
 }
 
@@ -49,6 +67,7 @@ onMounted(refresh)
   <section>
     <h1>用户管理</h1>
     <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="rolesNotice" class="muted">{{ rolesNotice }}</p>
     <table>
       <thead>
         <tr>
@@ -72,12 +91,12 @@ onMounted(refresh)
               <input
                 type="checkbox"
                 :checked="user.role_ids.includes(role.id)"
-                :disabled="!canManage"
+                :disabled="!canManage || savingRoles"
                 @change="toggleRole(user, role.id)"
               />
               {{ role.name }}
             </label>
-            <span v-if="roles.length === 0" class="muted">先在角色管理里创建角色</span>
+            <span v-if="roles.length === 0 && !rolesNotice" class="muted">先在角色管理里创建角色</span>
           </td>
           <td>
             <button type="button" :disabled="!canManage" @click="toggleActive(user)">

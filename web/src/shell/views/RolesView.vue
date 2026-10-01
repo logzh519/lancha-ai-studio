@@ -68,6 +68,8 @@ async function submit(): Promise<void> {
 }
 
 async function remove(role: ManagedRole): Promise<void> {
+  // 后端级联删除 user_role / role_permission，持有者会静默失去权限且不可撤销，故必须二次确认
+  if (!window.confirm(`删除角色「${role.name}」将收回 ${role.user_count} 个用户的对应权限，且无法撤销。确定吗？`)) return
   try {
     await deleteRole(role.id)
     if (editing.value?.id === role.id) startCreate()
