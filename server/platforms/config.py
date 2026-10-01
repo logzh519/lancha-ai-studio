@@ -1,7 +1,7 @@
 """平台配置，优先级：环境变量 > .env 文件 > 默认值；各模块自己的配置写在 modules/<模块名>/config.py。"""
 
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -23,7 +23,8 @@ class Settings(BaseSettings):
 
     # 认证方式：dev_header 用 X-User-Id 请求头（仅限本地开发），feishu 走飞书扫码登录。
     # 做成显式开关而不是「配了 app_id 就自动启用」：漏配时静默退回无认证，在生产上没人会发现。
-    auth_mode: str = "dev_header"
+    # 用 Literal 而非 str：拼写错误若仍接受任意字符串，服务会启动但实际走 dev_header（信任 X-User-Id），等于无认证且无告警。
+    auth_mode: Literal["dev_header", "feishu"] = "dev_header"
     feishu_app_id: str = ""
     feishu_app_secret: str = ""
     # 飞书会把浏览器直接重定向到这个地址，开发期必须填前端地址（Vite 代理转发），
