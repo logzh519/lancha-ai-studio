@@ -18,11 +18,13 @@ export const usePlatformStore = defineStore('platform', () => {
   const permissions = ref(new Set<string>())
   const superuser = ref(false)
   const loaded = ref(false)
+  const platformMenus = ref<MenuInfo[]>([])
 
   async function load(): Promise<void> {
     if (loaded.value) return
     const profile = await request<PlatformProfile>('/platform/modules')
     modules.value = profile.modules
+    platformMenus.value = profile.platform_menus
     permissions.value = new Set(profile.permissions)
     superuser.value = profile.superuser
     loaded.value = true
@@ -58,5 +60,5 @@ export const usePlatformStore = defineStore('platform', () => {
       }),
   )
 
-  return { modules, permissions, superuser, loaded, load, has, menuTree }
+  return { modules, permissions, superuser, loaded, platformMenus, load, has, menuTree }
 })

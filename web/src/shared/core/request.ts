@@ -10,7 +10,7 @@ function buildHeaders(init?: RequestInit): HeadersInit {
     'Content-Type': 'application/json',
     ...((init?.headers as Record<string, string>) ?? {}),
   }
-  // 本框架不含认证。接入登录后，这里换成携带 token 或 cookie
+  // 后端 AUTH_MODE=dev_header 时用它模拟身份；接飞书登录后应在 .env.local 里删掉这一项
   const devUserId = import.meta.env.VITE_DEV_USER_ID
   if (devUserId) {
     headers['X-User-Id'] = devUserId
@@ -19,7 +19,11 @@ function buildHeaders(init?: RequestInit): HeadersInit {
 }
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`/api${path}`, { ...init, headers: buildHeaders(init) })
+  const response = await fetch(`/api${path}`, {
+    ...init,
+    credentials: 'include',
+    headers: buildHeaders(init),
+  })
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))
     const error = new Error(body.message ?? response.statusText) as ApiError

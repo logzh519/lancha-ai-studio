@@ -18,6 +18,15 @@ export interface ModuleInfo {
 
 export interface PlatformProfile {
   modules: ModuleInfo[]
+  platform_menus: MenuInfo[]
   permissions: string[]
+  superuser: boolean
+}
+
+export interface SessionUser {
+  id: number
+  username: string
+  display_name: string
+  avatar_url: string
   superuser: boolean
 }
