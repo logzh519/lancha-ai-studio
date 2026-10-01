@@ -1,5 +1,5 @@
 {
-  "name": "lancha-ai-studio-frontend",
+  "name": "lancha-ai-studio-web",
   "private": true,
   "type": "module",
   "scripts": {

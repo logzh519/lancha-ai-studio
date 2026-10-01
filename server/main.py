@@ -1,6 +1,7 @@
-"""统一启动入口：在 backend 目录执行 python main.py。"""
+"""统一启动入口：在 server 目录执行 python main.py。"""
 
 import logging
+import sys
 
 import uvicorn
 
@@ -17,4 +18,6 @@ if __name__ == "__main__":
         factory=True,
         host=settings.app_host,
         port=settings.app_port,
+        # psycopg 异步不支持 Windows 默认的 ProactorEventLoop，统一使用 SelectorEventLoop
+        loop="asyncio:SelectorEventLoop" if sys.platform == "win32" else "auto",
     )

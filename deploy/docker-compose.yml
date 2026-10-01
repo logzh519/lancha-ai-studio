@@ -21,10 +21,10 @@ services:
       timeout: 3s
       retries: 10
 
-  backend:
+  server:
     build:
       context: ..
-      dockerfile: deploy/backend.Dockerfile
+      dockerfile: deploy/server.Dockerfile
     restart: unless-stopped
     depends_on:
       postgres:
@@ -40,15 +40,15 @@ services:
     ports:
       - "8000:8000"
 
-  frontend:
+  web:
     build:
       context: ..
-      dockerfile: deploy/frontend.Dockerfile
+      dockerfile: deploy/web.Dockerfile
       args:
         VITE_ENABLED_MODULES: ${VITE_ENABLED_MODULES:-}
     restart: unless-stopped
     depends_on:
-      - backend
+      - server
     ports:
       - "8080:80"
 

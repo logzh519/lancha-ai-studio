@@ -4,9 +4,9 @@ ARG VITE_ENABLED_MODULES=""
 ENV VITE_ENABLED_MODULES=$VITE_ENABLED_MODULES
 
 WORKDIR /app
-COPY frontend/package*.json ./
+COPY web/package*.json ./
 RUN npm ci
-COPY frontend/ ./
+COPY web/ ./
 RUN npm run build
 
 FROM nginx:1.27-alpine
