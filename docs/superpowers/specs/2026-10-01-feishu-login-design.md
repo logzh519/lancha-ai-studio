@@ -213,7 +213,7 @@ CREATE INDEX ix_platform_oauth_state_expires_at ON platform.oauth_state (expires
 
 ## 对现有框架的改动
 
-三处加法，不改现有行为：
+四处，其中前三处是纯加法：
 
 1. **平台权限码**。新增 `platforms/auth/permissions.py` 声明四个权限码
    （`platform:user:view`、`platform:user:manage`、`platform:role:view`、`platform:role:manage`），
@@ -225,6 +225,14 @@ CREATE INDEX ix_platform_oauth_state_expires_at ON platform.oauth_state (expires
    一个来源，不在前端硬编码第二份。
 3. **保留模块名**。`loader.py` 增加校验，禁止业务模块取名 `platform`，否则模块权限码会与平台权限码
    撞进同一命名空间。
+4. **`PrincipalProvider` 签名加一个参数**，从 `(Request) -> Principal` 改为
+   `(Request, AsyncSession) -> Principal`，`current_principal` 相应改为依赖 `get_session`。
+   必须这么做：会话 provider 要查库，若让它自建连接，就绕开了 FastAPI 的依赖体系——测试里
+   `app.dependency_overrides[get_session]` 将对它失效，provider 读的是真实库而非测试事务，
+   登录态在用例中永远读不出来。现有的 `_dev_header_provider` 忽略新参数，行为不变。
+
+另外在 `principal.py` 补一个 `reset_principal_provider()`，供测试在用例之间还原全局 provider——
+`create_app()` 在 `auth_mode=feishu` 下会改全局状态，不还原会污染后续用例。
 
 ## 配置项
 
