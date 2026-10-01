@@ -21,6 +21,19 @@ class Settings(BaseSettings):
     # 启用的业务模块（modules/ 下的目录名），逗号分隔；为空则加载全部模块
     enabled_modules: Annotated[list[str], NoDecode] = []
 
+    # 认证方式：dev_header 用 X-User-Id 请求头（仅限本地开发），feishu 走飞书扫码登录。
+    # 做成显式开关而不是「配了 app_id 就自动启用」：漏配时静默退回无认证，在生产上没人会发现。
+    auth_mode: str = "dev_header"
+    feishu_app_id: str = ""
+    feishu_app_secret: str = ""
+    # 飞书会把浏览器直接重定向到这个地址，开发期必须填前端地址（Vite 代理转发），
+    # 填后端地址会让 cookie 落在后端域下，前端带不过去。
+    feishu_redirect_uri: str = ""
+    feishu_scope: str = "auth:user.id:read contact:user.employee:readonly"
+    session_ttl_days: int = 7
+    cookie_secure: bool = False
+    frontend_base_url: str = "http://localhost:5173"
+
     # PostgreSQL：全平台共用一个库，按 schema 隔离（见 platforms/db.py）
     # 用 127.0.0.1 而非 localhost：Windows 上 localhost 优先解析为 ::1，Docker 端口转发不通会卡住
     postgres_host: str = "127.0.0.1"

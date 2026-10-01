@@ -102,3 +102,12 @@ async def session(db_ready):
         finally:
             await db_session.close()
             await transaction.rollback()
+
+
+@pytest.fixture(autouse=True)
+def restore_principal_provider():
+    """create_app(auth_mode="feishu") 会全局替换 provider，用例之间必须还原，否则互相污染。"""
+    from platforms.auth.principal import reset_principal_provider
+
+    yield
+    reset_principal_provider()

@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from platforms import events, registry
+from platforms.auth.principal import session_provider, set_principal_provider
 from platforms.config import Settings, get_settings
 from platforms.contract import ModuleSpec
 from platforms.db import dispose_engine
@@ -43,6 +44,16 @@ def create_app(settings: Settings | None = None, package: str = "modules") -> Fa
     modules = load_modules(settings.enabled_modules, package)
     registry.register(modules)
 
+    if settings.auth_mode == "feishu":
+        missing = [
+            name
+            for name in ("FEISHU_APP_ID", "FEISHU_APP_SECRET", "FEISHU_REDIRECT_URI")
+            if not getattr(settings, name.lower())
+        ]
+        if missing:
+            raise RuntimeError(f"AUTH_MODE=feishu 但缺少配置：{'、'.join(missing)}")
+        set_principal_provider(session_provider)
+
     events.clear()
     for spec in modules:
         for event, handlers in spec.subscriptions.items():
@@ -50,6 +61,10 @@ def create_app(settings: Settings | None = None, package: str = "modules") -> Fa
                 events.subscribe(event, handler)
 
     app = FastAPI(title="lancha-ai-studio", lifespan=_lifespan(modules))
+
+    # 路由里的 Depends(get_settings) 拿的是 lru_cache 的全局实例，
+    # 不接管的话 create_app(settings) 传进来的配置对请求处理完全不生效。
+    app.dependency_overrides[get_settings] = lambda: settings
 
     # add_middleware 后添加的在外层：CORS 放最外层，错误响应也能带上跨域头
     app.middleware("http")(request_context)
