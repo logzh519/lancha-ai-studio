@@ -4,8 +4,8 @@
 换 token 先打新域名，失败再回退老端点：两套端点在不同租户上的可用性不一致。
 """
 
-from dataclasses import dataclass
-from urllib.parse import urlencode
+from dataclasses import dataclass, field
+from urllib.parse import quote, urlencode
 
 import httpx
 
@@ -27,7 +27,8 @@ class FeishuError(Exception):
 @dataclass(frozen=True)
 class FeishuClient:
     app_id: str
-    app_secret: str
+    # 默认 repr 会打印全部字段，日志/断言失败时会把密钥带出去
+    app_secret: str = field(repr=False)
     transport: httpx.AsyncBaseTransport | None = None
 
     def authorize_url(self, redirect_uri: str, state: str, scope: str) -> str:
@@ -39,7 +40,8 @@ class FeishuClient:
         }
         if scope:
             query["scope"] = scope
-        return f"{AUTHORIZE_URL}?{urlencode(query)}"
+        # 飞书文档用 %20 分隔 scope，quote_plus 会把空格编成 +
+        return f"{AUTHORIZE_URL}?{urlencode(query, quote_via=quote)}"
 
     async def exchange(self, code: str, redirect_uri: str) -> str:
         payload = {
@@ -49,20 +51,23 @@ class FeishuClient:
             "code": code,
             "redirect_uri": redirect_uri,
         }
-        last_error = "飞书未返回任何响应"
+        errors: list[str] = []
         async with httpx.AsyncClient(transport=self.transport, timeout=TIMEOUT) as client:
             for url in TOKEN_URLS:
                 try:
                     response = await client.post(url, json=payload)
                     body = response.json()
                 except Exception as exc:
-                    last_error = f"{url} 请求失败：{exc}"
+                    errors.append(f"{url} 请求失败：{exc}")
                     continue
                 token = body.get("access_token", "")
                 if response.status_code < 300 and body.get("code", 0) == 0 and token:
                     return token
-                last_error = f"{url} 返回 status={response.status_code} code={body.get('code')} msg={body.get('msg')}"
-        raise FeishuError(f"换取飞书用户 token 失败：{last_error}")
+                errors.append(
+                    f"{url} 返回 status={response.status_code} code={body.get('code')} msg={body.get('msg')}"
+                )
+        detail = "; ".join(errors) if errors else "飞书未返回任何响应"
+        raise FeishuError(f"换取飞书用户 token 失败：{detail}")
 
     async def user_info(self, access_token: str) -> ExternalProfile:
         async with httpx.AsyncClient(transport=self.transport, timeout=TIMEOUT) as client:

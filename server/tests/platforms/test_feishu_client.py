@@ -5,7 +5,7 @@ import json
 import httpx
 import pytest
 
-from platforms.auth.feishu.client import FeishuClient, FeishuError
+from platforms.auth.feishu.client import TOKEN_URLS, FeishuClient, FeishuError
 
 USER_INFO_BODY = {
     "code": 0,
@@ -25,6 +25,13 @@ def _client(handler) -> FeishuClient:
     return FeishuClient(app_id="cli_x", app_secret="secret", transport=httpx.MockTransport(handler))
 
 
+def test_client_repr_does_not_expose_app_secret():
+    client = _client(lambda request: httpx.Response(200))
+    text = repr(client)
+    assert "secret" not in text
+    assert "app_secret" not in text
+
+
 def test_authorize_url_carries_client_id_state_and_scope():
     url = _client(lambda request: httpx.Response(200)).authorize_url(
         "https://app.test/api/platform/auth/feishu/callback", "st4te", "auth:user.id:read"
@@ -35,6 +42,16 @@ def test_authorize_url_carries_client_id_state_and_scope():
     assert "state=st4te" in url
     assert "scope=auth%3Auser.id%3Aread" in url
     assert "response_type=code" in url
+
+
+def test_authorize_url_encodes_scope_with_percent20_and_escapes_redirect_query():
+    scopes = "auth:user.id:read contact:user.employee:readonly"
+    redirect = "https://app.test/cb?tenant=1&from=web"
+    url = _client(lambda request: httpx.Response(200)).authorize_url(redirect, "st", scopes)
+
+    assert "scope=auth%3Auser.id%3Aread%20contact%3Auser.employee%3Areadonly" in url
+    assert "scope=" in url and "+" not in url.split("scope=")[1].split("&")[0]
+    assert "redirect_uri=https%3A%2F%2Fapp.test%2Fcb%3Ftenant%3D1%26from%3Dweb" in url
 
 
 async def test_exchange_falls_back_to_legacy_endpoint():
@@ -57,8 +74,12 @@ async def test_exchange_raises_when_both_endpoints_fail():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"code": 20001, "msg": "invalid code"})
 
-    with pytest.raises(FeishuError):
+    with pytest.raises(FeishuError) as exc_info:
         await _client(handler).exchange("bad-code", "https://app.test/cb")
+
+    msg = str(exc_info.value)
+    assert TOKEN_URLS[0] in msg
+    assert TOKEN_URLS[1] in msg
 
 
 async def test_user_info_is_normalised_into_external_profile():
