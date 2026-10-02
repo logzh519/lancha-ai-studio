@@ -28,7 +28,7 @@ def _timestamps() -> list[sa.Column]:
 
 def upgrade() -> None:
     op.create_table(
-        "app_user",
+        "user",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("username", sa.String(length=64), nullable=False),
         sa.Column("display_name", sa.String(length=64), nullable=False),
@@ -68,7 +68,7 @@ def upgrade() -> None:
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("user_id", sa.BigInteger(), nullable=False),
         sa.Column("role_id", sa.BigInteger(), nullable=False),
-        sa.ForeignKeyConstraint(["user_id"], [f"{SCHEMA}.app_user.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], [f"{SCHEMA}.user.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["role_id"], [f"{SCHEMA}.role.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("user_id", "role_id", name="uq_user_role"),
@@ -93,4 +93,4 @@ def downgrade() -> None:
     op.drop_index("ix_platform_permission_module", table_name="permission", schema=SCHEMA)
     op.drop_table("permission", schema=SCHEMA)
     op.drop_table("role", schema=SCHEMA)
-    op.drop_table("app_user", schema=SCHEMA)
+    op.drop_table("user", schema=SCHEMA)

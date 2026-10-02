@@ -1,4 +1,4 @@
-"""外部身份到 app_user 的映射。
+"""外部身份到 user 的映射。
 
 与登录方式无关：飞书、公司账号系统都把自己的用户资料归一成 ExternalProfile 后交给这里。
 认人顺序是「身份 → 邮箱 → 新建」，中间那步是为了同一个人用不同登录方式进来时能合并到一个账号。
@@ -28,7 +28,7 @@ def _normalise_email(email: str) -> str:
 
 
 async def upsert(session: AsyncSession, profile: ExternalProfile) -> AppUser:
-    """按外部身份找到或创建 app_user，并刷新身份记录。新用户不授予任何角色。"""
+    """按外部身份找到或创建 user，并刷新身份记录。新用户不授予任何角色。"""
     email = _normalise_email(profile.email)
 
     identity = (

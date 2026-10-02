@@ -2,7 +2,7 @@
 
 平台表建在 platform schema，模块表建在 mod_<模块名> schema。
 模块只能读写自己的 schema；跨模块取数走对方 contract.py 或事件，禁止跨 schema JOIN 与外键。
-唯一的例外是可以引用 platform.app_user.id。
+唯一的例外是可以引用 platform.user.id。
 """
 
 from collections.abc import AsyncIterator

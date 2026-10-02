@@ -81,13 +81,13 @@ def test_cross_schema_foreign_keys_only_reference_platform_users():
                 if (
                     table.schema != PLATFORM_SCHEMA
                     and target.schema == PLATFORM_SCHEMA
-                    and target.name == "app_user"
+                    and target.name == "user"
                     and element.column.name == "id"
                 ):
                     continue
                 violations.append((table.fullname, target.fullname))
 
-    assert not violations, f"发现未允许的跨 schema 外键（仅允许模块引用 platform.app_user.id）：{violations}"
+    assert not violations, f"发现未允许的跨 schema 外键（仅允许模块引用 platform.user.id）：{violations}"
 
 
 @pytest.mark.parametrize("name", discover_module_names())
