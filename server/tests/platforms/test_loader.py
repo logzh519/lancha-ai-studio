@@ -1,9 +1,16 @@
 """模块契约校验：不合规的模块必须在启动时就失败，而不是留到运行期。"""
 
+import importlib
+
 import pytest
 
 from platforms.contract import MenuDef, ModuleSpec, PermissionDef
-from platforms.gateway.loader import ModuleLoadError, _topo_sort, load_modules, validate_spec
+from platforms.gateway.loader import (
+    ModuleLoadError,
+    _topo_sort,
+    load_modules,
+    validate_spec,
+)
 
 
 def _spec(**kwargs) -> ModuleSpec:
@@ -80,3 +87,22 @@ def test_rejects_unknown_enabled_module():
 
 def test_loads_real_modules():
     assert [spec.name for spec in load_modules([])] == ["example"]
+
+
+def test_disabled_module_is_not_imported(tmp_path, monkeypatch):
+    package = "isolated_modules"
+    package_dir = tmp_path / package
+    chosen_dir = package_dir / "chosen"
+    disabled_dir = package_dir / "disabled"
+    chosen_dir.mkdir(parents=True)
+    disabled_dir.mkdir()
+    (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    (chosen_dir / "module.py").write_text(
+        "from platforms.contract import ModuleSpec\nMODULE = ModuleSpec(name='chosen', title='Chosen')\n",
+        encoding="utf-8",
+    )
+    (disabled_dir / "module.py").write_text("raise RuntimeError('disabled module imported')\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+
+    assert [spec.name for spec in load_modules(["chosen"], package)] == ["chosen"]

@@ -64,22 +64,6 @@ def validate_spec(spec: ModuleSpec, directory: str) -> None:
             raise ModuleLoadError(f"事件名 {event!r} 格式须为 <模块名>.<事件>")
 
 
-def _resolve_enabled(enabled: list[str], specs: dict[str, ModuleSpec]) -> set[str]:
-    """按 depends_on 递归补全：启用了某个模块，就自动带上它依赖的模块。"""
-    resolved: set[str] = set()
-    pending = list(enabled)
-    while pending:
-        name = pending.pop()
-        if name in resolved:
-            continue
-        resolved.add(name)
-        for dep in specs[name].depends_on:
-            if dep not in specs:
-                raise ModuleLoadError(f"模块 {name} 依赖的 {dep} 不存在")
-            pending.append(dep)
-    return resolved
-
-
 def _topo_sort(names: set[str], specs: dict[str, ModuleSpec]) -> list[ModuleSpec]:
     """依赖在前，被依赖方先启动；成环时报出环上的模块。"""
     ordered: list[ModuleSpec] = []
@@ -112,10 +96,17 @@ def load_modules(enabled: list[str], package: str = "modules") -> list[ModuleSpe
         raise ModuleLoadError(f"ENABLED_MODULES 中的模块不存在：{unknown}，可用模块：{available}")
 
     specs: dict[str, ModuleSpec] = {}
-    for name in available:
+    pending = list(enabled or available)
+    while pending:
+        name = pending.pop()
+        if name in specs:
+            continue
         spec = _import_spec(name, package)
         validate_spec(spec, name)
         specs[name] = spec
+        for dependency in spec.depends_on:
+            if dependency not in available:
+                raise ModuleLoadError(f"模块 {name} 依赖的 {dependency} 不存在")
+            pending.append(dependency)
 
-    selected = _resolve_enabled(enabled or available, specs)
-    return _topo_sort(selected, specs)
+    return _topo_sort(set(specs), specs)

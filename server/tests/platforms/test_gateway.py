@@ -3,13 +3,17 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from platforms.config import Settings
+from platforms.contract import ModuleSpec
+from platforms.gateway import app as gateway_app
 from platforms.gateway.app import create_app
 from platforms.gateway.middleware import REQUEST_ID_HEADER
 
 
 @pytest.fixture
 async def client():
-    async with AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://test") as c:
+    app = create_app(Settings(auth_mode="dev_header"))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
 
 
@@ -33,6 +37,34 @@ async def test_unknown_path_uses_unified_error_body(client):
 
 
 async def test_module_router_is_mounted_under_module_prefix():
-    paths = set(create_app().openapi()["paths"])
+    paths = set(create_app(Settings(auth_mode="dev_header")).openapi()["paths"])
     assert "/api/example/items" in paths
     assert "/api/platform/modules" in paths
+
+
+async def test_shutdown_continues_after_hook_failure(monkeypatch):
+    calls = []
+
+    async def failing_shutdown():
+        calls.append("failing")
+        raise RuntimeError("shutdown failed")
+
+    async def later_shutdown():
+        calls.append("later")
+
+    async def dispose():
+        calls.append("dispose")
+
+    monkeypatch.setattr(gateway_app, "dispose_engine", dispose)
+    app = create_app(Settings(auth_mode="dev_header"))
+    app.router.lifespan_context = gateway_app._lifespan(
+        [
+            ModuleSpec(name="first", title="First", on_shutdown=failing_shutdown),
+            ModuleSpec(name="second", title="Second", on_shutdown=later_shutdown),
+        ]
+    )
+
+    async with app.router.lifespan_context(app):
+        pass
+
+    assert calls == ["later", "failing", "dispose"]

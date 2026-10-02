@@ -14,6 +14,7 @@ from platforms.auth.models import (
     UserRole,
     UserSession,
 )
+from platforms.config import Settings
 from platforms.db import get_session
 from platforms.gateway.app import create_app
 
@@ -22,7 +23,7 @@ pytestmark = pytest.mark.db
 
 @pytest.fixture
 async def client(session):
-    app = create_app()
+    app = create_app(Settings(auth_mode="dev_header"))
 
     async def _session_override():
         yield session

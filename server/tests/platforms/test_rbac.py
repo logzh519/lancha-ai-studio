@@ -6,6 +6,7 @@ from httpx import ASGITransport, AsyncClient
 from platforms.auth import service
 from platforms.auth.models import AppUser, Permission, Role, RolePermission, UserRole
 from platforms.auth.principal import ANONYMOUS, Principal
+from platforms.config import Settings
 from platforms.contract import PermissionDef
 from platforms.db import get_session
 from platforms.gateway.app import create_app
@@ -70,7 +71,7 @@ async def test_sync_permissions_adds_updates_and_removes(session):
 
 @pytest.fixture
 async def client(session):
-    app = create_app()
+    app = create_app(Settings(auth_mode="dev_header"))
 
     async def _session_override():
         yield session

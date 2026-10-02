@@ -31,6 +31,12 @@ services:
         condition: service_healthy
     environment:
       APP_HOST: 0.0.0.0
+      AUTH_MODE: ${AUTH_MODE:-feishu}
+      FEISHU_APP_ID: ${FEISHU_APP_ID:-}
+      FEISHU_APP_SECRET: ${FEISHU_APP_SECRET:-}
+      FEISHU_REDIRECT_URI: ${FEISHU_REDIRECT_URI:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:8080}
       POSTGRES_HOST: postgres
       POSTGRES_USER: ${POSTGRES_USER:-lancha}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lancha}

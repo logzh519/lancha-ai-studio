@@ -16,7 +16,13 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from platforms.config import get_settings
-from platforms.db import PLATFORM_SCHEMA, Base, dispose_engine, get_engine, module_schema
+from platforms.db import (
+    PLATFORM_SCHEMA,
+    Base,
+    dispose_engine,
+    get_engine,
+    module_schema,
+)
 from platforms.gateway.loader import discover_module_names
 
 _settings = get_settings()
@@ -102,12 +108,3 @@ async def session(db_ready):
         finally:
             await db_session.close()
             await transaction.rollback()
-
-
-@pytest.fixture(autouse=True)
-def restore_principal_provider():
-    """create_app(auth_mode="feishu") 会全局替换 provider，用例之间必须还原，否则互相污染。"""
-    from platforms.auth.principal import reset_principal_provider
-
-    yield
-    reset_principal_provider()

@@ -65,6 +65,31 @@ def test_every_table_lives_in_its_own_schema():
     assert not misplaced, f"这些表没有归属到正确的 schema：{misplaced}"
 
 
+def test_cross_schema_foreign_keys_only_reference_platform_users():
+    importlib.import_module("platforms.auth.models")
+    for name in discover_module_names():
+        if importlib.util.find_spec(f"modules.{name}.models"):
+            importlib.import_module(f"modules.{name}.models")
+
+    violations = []
+    for table in Base.metadata.tables.values():
+        for constraint in table.foreign_key_constraints:
+            for element in constraint.elements:
+                target = element.column.table
+                if target.schema == table.schema:
+                    continue
+                if (
+                    table.schema != PLATFORM_SCHEMA
+                    and target.schema == PLATFORM_SCHEMA
+                    and target.name == "app_user"
+                    and element.column.name == "id"
+                ):
+                    continue
+                violations.append((table.fullname, target.fullname))
+
+    assert not violations, f"发现未允许的跨 schema 外键（仅允许模块引用 platform.app_user.id）：{violations}"
+
+
 @pytest.mark.parametrize("name", discover_module_names())
 def test_module_exposes_contract(name: str):
     """每个模块都必须有 contract.py，哪怕暂时不对外提供任何能力。"""

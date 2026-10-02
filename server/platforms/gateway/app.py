@@ -9,7 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from platforms import events, registry
 from platforms.auth.admin_api import router as admin_router
 from platforms.auth.api import router as auth_router
-from platforms.auth.principal import session_provider, set_principal_provider
+from platforms.auth.principal import (
+    current_principal,
+    principal_dependency,
+    session_provider,
+)
 from platforms.config import Settings, get_settings
 from platforms.contract import ModuleSpec
 from platforms.db import dispose_engine
@@ -35,7 +39,10 @@ def _lifespan(modules: list[ModuleSpec]):
         finally:
             for spec in reversed(started):
                 if spec.on_shutdown:
-                    await spec.on_shutdown()
+                    try:
+                        await spec.on_shutdown()
+                    except Exception:
+                        logger.exception("模块关闭失败：%s", spec.name)
             await dispose_engine()
 
     return lifespan
@@ -54,7 +61,9 @@ def create_app(settings: Settings | None = None, package: str = "modules") -> Fa
         ]
         if missing:
             raise RuntimeError(f"AUTH_MODE=feishu 但缺少配置：{'、'.join(missing)}")
-        set_principal_provider(session_provider)
+        auth_provider = session_provider
+    else:
+        auth_provider = None
 
     events.clear()
     for spec in modules:
@@ -63,6 +72,7 @@ def create_app(settings: Settings | None = None, package: str = "modules") -> Fa
                 events.subscribe(event, handler)
 
     app = FastAPI(title="lancha-ai-studio", lifespan=_lifespan(modules))
+    app.dependency_overrides[current_principal] = principal_dependency(auth_provider)
 
     # 路由里的 Depends(get_settings) 拿的是 lru_cache 的全局实例，
     # 不接管的话 create_app(settings) 传进来的配置对请求处理完全不生效。
