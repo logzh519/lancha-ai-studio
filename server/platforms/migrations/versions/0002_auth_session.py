@@ -53,6 +53,7 @@ def upgrade() -> None:
     op.create_table(
         "oauth_state",
         sa.Column("state_hash", sa.String(length=64), nullable=False),
+        sa.Column("nonce_hash", sa.String(length=64), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("state_hash"),

@@ -50,9 +50,9 @@ async def test_deleting_user_removes_identity_and_session(session):
 
 async def test_oauth_state_is_keyed_by_hash(session):
     expires = datetime.now(timezone.utc) + timedelta(minutes=10)
-    session.add(OAuthState(state_hash="s" * 64, expires_at=expires))
+    session.add(OAuthState(state_hash="s" * 64, nonce_hash="n" * 64, expires_at=expires))
     await session.flush()
 
-    session.add(OAuthState(state_hash="s" * 64, expires_at=expires))
+    session.add(OAuthState(state_hash="s" * 64, nonce_hash="n" * 64, expires_at=expires))
     with pytest.raises(IntegrityError):
         await session.flush()

@@ -4,6 +4,8 @@
 用户看到的应该是登录页上的一句中文，而不是一屏报文。
 """
 
+import hmac
+import logging
 from datetime import timedelta
 from urllib.parse import quote
 
@@ -15,10 +17,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from platforms.auth import identity, oauth_state
 from platforms.auth.feishu.client import FeishuClient, FeishuError
 from platforms.auth.models import AppUser, UserIdentity
+from platforms.auth.oauth_state import NONCE_COOKIE
 from platforms.auth.principal import Principal, current_principal
-from platforms.auth.session import SESSION_COOKIE, issue, revoke
+from platforms.auth.session import SESSION_COOKIE, hash_token, issue, revoke
 from platforms.config import Settings, get_settings
 from platforms.db import get_session
+
+logger = logging.getLogger("platform.auth")
 
 router = APIRouter()
 
@@ -37,11 +42,22 @@ async def auth_config(settings: Settings = Depends(get_settings)):
 
 @router.post("/feishu/login-url")
 async def feishu_login_url(
+    response: Response,
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
     feishu: FeishuClient = Depends(build_feishu_client),
 ):
-    state = await oauth_state.create(session, STATE_TTL)
+    state, nonce = await oauth_state.create(session, STATE_TTL)
+    # nonce 明文只留在发起登录的这个浏览器里，回调时用它证明「state 是我自己要来的」。
+    response.set_cookie(
+        NONCE_COOKIE,
+        nonce,
+        max_age=int(STATE_TTL.total_seconds()),
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+        path="/",
+    )
     return {
         "authorize_url": feishu.authorize_url(settings.feishu_redirect_uri, state, settings.feishu_scope),
         "expires_in": int(STATE_TTL.total_seconds()),
@@ -50,6 +66,7 @@ async def feishu_login_url(
 
 @router.get("/feishu/callback")
 async def feishu_callback(
+    request: Request,
     code: str = "",
     state: str = "",
     error: str = "",
@@ -60,36 +77,47 @@ async def feishu_callback(
     def failed(message: str) -> RedirectResponse:
         return RedirectResponse(f"{settings.frontend_base_url}/login?error={quote(message)}", status_code=302)
 
-    if not await oauth_state.consume(session, state):
-        return failed("飞书登录状态无效或已过期，请重新登录。")
-    if error:
-        return failed("用户取消或拒绝了飞书授权。")
-    if not code:
-        return failed("飞书回调缺少授权码。")
+    async def complete() -> RedirectResponse:
+        nonce_hash = await oauth_state.consume(session, state)
+        if nonce_hash is None:
+            return failed("飞书登录状态无效或已过期，请重新登录。")
+        # state 对任何浏览器都有效，所以还要求发起方 cookie 里的 nonce 对得上，
+        # 否则攻击者可以把自己授权好的回调地址丢给受害者点开，受害者就登进了攻击者的账号。
+        if not hmac.compare_digest(nonce_hash, hash_token(request.cookies.get(NONCE_COOKIE, ""))):
+            return failed("飞书登录状态无效或已过期，请重新登录。")
+        if error:
+            return failed("用户取消或拒绝了飞书授权。")
+        if not code:
+            return failed("飞书回调缺少授权码。")
 
-    try:
-        token = await feishu.exchange(code, settings.feishu_redirect_uri)
-        profile = await feishu.user_info(token)
-    except FeishuError as exc:
-        return failed(str(exc))
+        try:
+            token = await feishu.exchange(code, settings.feishu_redirect_uri)
+            profile = await feishu.user_info(token)
+        except FeishuError as exc:
+            return failed(str(exc))
 
-    user = await identity.upsert(session, profile)
-    if not user.is_active:
-        # 不拦的话会签发一个永远解析不出身份的 cookie，用户只会被静默弹回登录页，
-        # 完全看不出自己是被停用了。
-        return failed("账号已被停用，请联系管理员。")
-    raw = await issue(session, user.id, timedelta(days=settings.session_ttl_days))
+        user = await identity.upsert(session, profile)
+        if not user.is_active:
+            # 不拦的话会签发一个永远解析不出身份的 cookie，用户只会被静默弹回登录页，
+            # 完全看不出自己是被停用了。
+            return failed("账号已被停用，请联系管理员。")
+        raw = await issue(session, user.id, timedelta(days=settings.session_ttl_days))
 
-    response = RedirectResponse(f"{settings.frontend_base_url}/", status_code=302)
-    response.set_cookie(
-        SESSION_COOKIE,
-        raw,
-        max_age=settings.session_ttl_days * 24 * 3600,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite="lax",
-        path="/",
-    )
+        response = RedirectResponse(f"{settings.frontend_base_url}/", status_code=302)
+        response.set_cookie(
+            SESSION_COOKIE,
+            raw,
+            max_age=settings.session_ttl_days * 24 * 3600,
+            httponly=True,
+            secure=settings.cookie_secure,
+            samesite="lax",
+            path="/",
+        )
+        return response
+
+    response = await complete()
+    # nonce 是一次性的：留着它下一次回调就能拿旧 cookie 配新 state，绑定也就白做了。
+    response.delete_cookie(NONCE_COOKIE, path="/")
     return response
 
 

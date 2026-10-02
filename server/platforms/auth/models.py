@@ -112,11 +112,17 @@ class UserSession(Base):
 
 
 class OAuthState(Base):
-    """OAuth 一次性 state，同样只存哈希，消费时用带有有效期的 DELETE RETURNING。"""
+    """OAuth 一次性 state，同样只存哈希，消费时用带有有效期的 DELETE RETURNING。
+
+    nonce_hash 把 state 绑到发起登录的那个浏览器上：明文 nonce 只在发起方的 HttpOnly cookie 里，
+    回调时两边不匹配就拒绝。没有它，任何人拿到的 state 在任何人的浏览器里都有效，
+    攻击者就能把指向自己账号的回调地址诱导给受害者点开（login CSRF）。
+    """
 
     __tablename__ = "oauth_state"
     __table_args__ = {"schema": PLATFORM_SCHEMA}
 
     state_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    nonce_hash: Mapped[str] = mapped_column(String(64))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
