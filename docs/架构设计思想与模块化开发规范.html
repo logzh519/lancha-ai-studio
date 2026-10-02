@@ -282,6 +282,7 @@
       <article class="truth actual"><h3>平台框架已具备的基础</h3><p>模块化单体与 Monorepo、平台 / 业务目录分层、FastAPI 网关和模块注册、RBAC、schema 与迁移约定、后端架构边界测试及前端边界 lint。</p></article>
       <article class="truth direction"><h3>业务异步执行的设计方向</h3><p>长耗时工作由业务模块持有状态机、重试与执行策略。V5 设计提出模块声明后台循环，由 worker 启动；该执行方案应以对应业务实现与评审结论为准，不等同于 Celery 已是框架能力。</p></article>
     </div>
+    <p class="diagram-note"><b>平台 API 命名：</b>认证为 <code>/api/auth/...</code>，管理接口为 <code>/api/admin/...</code>，模块与权限清单为 <code>/api/modules</code>；业务模块继续使用 <code>/api/&lt;模块名&gt;/...</code>。<code>auth</code>、<code>admin</code>、<code>modules</code> 为保留模块名。</p>
   </section>
 
   <section id="structure">

@@ -16,7 +16,7 @@ const starting = ref(false)
 
 onMounted(async () => {
   try {
-    const config = await request<{ feishu_configured: boolean }>('/platform/auth/config')
+    const config = await request<{ feishu_configured: boolean }>('/auth/config')
     feishuConfigured.value = config.feishu_configured
   } catch {
     configFailed.value = true

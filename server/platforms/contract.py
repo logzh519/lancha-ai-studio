@@ -1,7 +1,7 @@
 """模块与平台之间的契约：每个模块在 modules/<模块名>/module.py 中导出 MODULE = ModuleSpec(...)。
 
 ModuleSpec 是模块元信息的唯一来源——路由、权限点、菜单都在这里声明一次，
-前端不重复维护菜单和权限清单，登录后调 GET /api/platform/modules 取。
+前端不重复维护菜单和权限清单，登录后调 GET /api/modules 取。
 """
 
 from collections.abc import Awaitable, Callable

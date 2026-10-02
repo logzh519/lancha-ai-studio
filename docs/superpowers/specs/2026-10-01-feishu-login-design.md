@@ -137,14 +137,14 @@ CREATE INDEX ix_platform_oauth_state_expires_at ON platform.oauth_state (expires
 
 ```
 未登录访问任意页
-  → 路由守卫 GET /api/platform/auth/me → 401 → 跳 /login
+  → 路由守卫 GET /api/auth/me → 401 → 跳 /login
 
 /login 点「飞书登录」
-  → POST /api/platform/auth/feishu/login-url
+  → POST /api/auth/feishu/login-url
      生成 state，sha256 存 oauth_state（10 分钟），返回 authorizeUrl
   → window.location.href = authorizeUrl
 
-飞书授权完成，浏览器回到 GET /api/platform/auth/feishu/callback?code&state
+飞书授权完成，浏览器回到 GET /api/auth/feishu/callback?code&state
   → DELETE FROM platform.oauth_state
      WHERE state_hash = :h AND expires_at > now() RETURNING state_hash   -- 原子消费
      消费失败 → 302 /login?error=...
@@ -171,8 +171,8 @@ CREATE INDEX ix_platform_oauth_state_expires_at ON platform.oauth_state (expires
 
 | 环境 | `FEISHU_REDIRECT_URI` |
 |---|---|
-| 开发 | `http://localhost:5173/api/platform/auth/feishu/callback` |
-| 生产 | `https://<域名>/api/platform/auth/feishu/callback` |
+| 开发 | `http://localhost:5173/api/auth/feishu/callback` |
+| 生产 | `https://<域名>/api/auth/feishu/callback` |
 
 飞书会把浏览器直接重定向到这个地址。若填 `127.0.0.1:8000`，cookie 落在 8000 域下，而前端页面在
 5173 域，带不过去，表现为「回调成功但仍然未登录」。填前端地址则经 Vite 代理转发，cookie 落在 5173 域。
@@ -185,24 +185,24 @@ CREATE INDEX ix_platform_oauth_state_expires_at ON platform.oauth_state (expires
 
 | 方法 | 路径 | 权限 | 说明 |
 |---|---|---|---|
-| GET | `/api/platform/auth/config` | 匿名 | 飞书是否已配置 |
-| POST | `/api/platform/auth/feishu/login-url` | 匿名 | 生成 state 与授权 URL |
-| GET | `/api/platform/auth/feishu/callback` | 匿名 | 飞书回调，建会话后 302 |
-| GET | `/api/platform/auth/me` | 登录 | 当前用户资料 |
-| POST | `/api/platform/auth/logout` | 登录 | 删会话、清 cookie |
+| GET | `/api/auth/config` | 匿名 | 飞书是否已配置 |
+| POST | `/api/auth/feishu/login-url` | 匿名 | 生成 state 与授权 URL |
+| GET | `/api/auth/feishu/callback` | 匿名 | 飞书回调，建会话后 302 |
+| GET | `/api/auth/me` | 登录 | 当前用户资料 |
+| POST | `/api/auth/logout` | 登录 | 删会话、清 cookie |
 
 用户与角色：
 
 | 方法 | 路径 | 权限 |
 |---|---|---|
-| GET | `/api/platform/users` | `platform:user:view` |
-| PATCH | `/api/platform/users/{id}/roles` | `platform:user:manage` |
-| PATCH | `/api/platform/users/{id}/active` | `platform:user:manage` |
-| GET | `/api/platform/roles` | `platform:role:view` |
-| POST | `/api/platform/roles` | `platform:role:manage` |
-| PATCH | `/api/platform/roles/{id}` | `platform:role:manage` |
-| DELETE | `/api/platform/roles/{id}` | `platform:role:manage` |
-| GET | `/api/platform/permissions` | `platform:role:view` |
+| GET | `/api/admin/users` | `platform:user:view` |
+| PATCH | `/api/admin/users/{id}/roles` | `platform:user:manage` |
+| PATCH | `/api/admin/users/{id}/active` | `platform:user:manage` |
+| GET | `/api/admin/roles` | `platform:role:view` |
+| POST | `/api/admin/roles` | `platform:role:manage` |
+| PATCH | `/api/admin/roles/{id}` | `platform:role:manage` |
+| DELETE | `/api/admin/roles/{id}` | `platform:role:manage` |
+| GET | `/api/admin/permissions` | `platform:role:view` |
 
 用户列表展示头像、姓名、邮箱、角色、状态、最后登录时间（取 `user_identity.last_login_at`）。
 一次返回全部用户，不分页——公司内部系统量级有限，分页等真的慢了再加。不做删除用户和编辑资料，
@@ -219,7 +219,7 @@ CREATE INDEX ix_platform_oauth_state_expires_at ON platform.oauth_state (expires
    （`platform:user:view`、`platform:user:manage`、`platform:role:view`、`platform:role:manage`），
    并让 `registry.all_permissions()` 把它们并入返回值。不改的话 `sync_permissions()` 会把平台权限
    当成「模块里已删除的权限点」清理掉——该函数会 `DELETE` 所有不在声明列表里的权限点。
-2. **平台菜单**。`GET /api/platform/modules` 的响应加 `platform_menus` 字段，结构与模块菜单的
+2. **平台菜单**。`GET /api/modules` 的响应加 `platform_menus` 字段，结构与模块菜单的
    `MenuDef` 一致（`title` / `path` / `icon` / `order` / `permission` / `parent`），同样按当前用户的
    权限码过滤。`AppLayout` 将其渲染成固定的「系统管理」分组，置于模块菜单之后。菜单依然只有后端
    一个来源，不在前端硬编码第二份。

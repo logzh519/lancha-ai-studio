@@ -39,7 +39,10 @@ async def test_unknown_path_uses_unified_error_body(client):
 async def test_module_router_is_mounted_under_module_prefix():
     paths = set(create_app(Settings(auth_mode="dev_header")).openapi()["paths"])
     assert "/api/example/items" in paths
-    assert "/api/platform/modules" in paths
+    assert "/api/modules" in paths
+    assert "/api/auth/config" in paths
+    assert "/api/admin/users" in paths
+    assert "/api/platform/modules" not in paths
 
 
 async def test_shutdown_continues_after_hook_failure(monkeypatch):

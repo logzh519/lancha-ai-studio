@@ -23,7 +23,7 @@ SETTINGS = Settings(
     auth_mode="feishu",
     feishu_app_id="cli_x",
     feishu_app_secret="secret",
-    feishu_redirect_uri="https://app.test/api/platform/auth/feishu/callback",
+    feishu_redirect_uri="https://app.test/api/auth/feishu/callback",
     frontend_base_url="https://app.test",
 )
 
@@ -63,24 +63,24 @@ async def client(session):
 
 async def _start_login(client) -> str:
     """走一遍 login-url 拿原始 state，nonce cookie 顺势落进客户端的 cookie 罐。"""
-    response = await client.post("/api/platform/auth/feishu/login-url")
+    response = await client.post("/api/auth/feishu/login-url")
     return parse_qs(urlparse(response.json()["authorize_url"]).query)["state"][0]
 
 
 async def test_config_reports_feishu_is_configured(client):
-    response = await client.get("/api/platform/auth/config")
+    response = await client.get("/api/auth/config")
     assert response.json() == {"feishu_configured": True}
 
 
 async def test_login_url_contains_state_and_redirect(client):
-    response = await client.post("/api/platform/auth/feishu/login-url")
+    response = await client.post("/api/auth/feishu/login-url")
     url = response.json()["authorize_url"]
     assert url.startswith("https://accounts.feishu.cn/open-apis/authen/v1/authorize?")
     assert "state=" in url
 
 
 async def test_login_url_binds_state_to_this_browser_with_a_nonce_cookie(client):
-    response = await client.post("/api/platform/auth/feishu/login-url")
+    response = await client.post("/api/auth/feishu/login-url")
 
     assert response.cookies.get(NONCE_COOKIE)
     assert "httponly" in response.headers["set-cookie"].lower()
@@ -90,7 +90,7 @@ async def test_callback_creates_session_and_redirects_home(client, session):
     raw_state = await _start_login(client)
 
     response = await client.get(
-        "/api/platform/auth/feishu/callback",
+        "/api/auth/feishu/callback",
         params={"code": "the-code", "state": raw_state},
         follow_redirects=False,
     )
@@ -105,13 +105,13 @@ async def test_callback_creates_session_and_redirects_home(client, session):
 async def test_callback_rejects_replayed_state(client, session):
     raw_state = await _start_login(client)
     await client.get(
-        "/api/platform/auth/feishu/callback",
+        "/api/auth/feishu/callback",
         params={"code": "the-code", "state": raw_state},
         follow_redirects=False,
     )
 
     replayed = await client.get(
-        "/api/platform/auth/feishu/callback",
+        "/api/auth/feishu/callback",
         params={"code": "the-code", "state": raw_state},
         follow_redirects=False,
     )
@@ -126,7 +126,7 @@ async def test_callback_rejects_state_without_matching_nonce_cookie(client, sess
     client.cookies.clear()
 
     response = await client.get(
-        "/api/platform/auth/feishu/callback",
+        "/api/auth/feishu/callback",
         params={"code": "the-code", "state": raw_state},
         follow_redirects=False,
     )
@@ -142,7 +142,7 @@ async def test_callback_rejects_wrong_nonce_cookie(client, session):
     client.cookies.set(NONCE_COOKIE, "someone-elses-nonce")
 
     response = await client.get(
-        "/api/platform/auth/feishu/callback",
+        "/api/auth/feishu/callback",
         params={"code": "the-code", "state": raw_state},
         follow_redirects=False,
     )
@@ -155,7 +155,7 @@ async def test_callback_clears_the_nonce_cookie(client):
     raw_state = await _start_login(client)
 
     await client.get(
-        "/api/platform/auth/feishu/callback",
+        "/api/auth/feishu/callback",
         params={"code": "the-code", "state": raw_state},
         follow_redirects=False,
     )
@@ -165,7 +165,7 @@ async def test_callback_clears_the_nonce_cookie(client):
 
 async def test_callback_with_authorization_error_redirects_to_login(client):
     response = await client.get(
-        "/api/platform/auth/feishu/callback",
+        "/api/auth/feishu/callback",
         params={"error": "access_denied", "state": "whatever"},
         follow_redirects=False,
     )
@@ -178,7 +178,7 @@ async def test_callback_refuses_deactivated_user(client, session):
     raw_state = await _start_login(client)
 
     response = await client.get(
-        "/api/platform/auth/feishu/callback",
+        "/api/auth/feishu/callback",
         params={"code": "the-code", "state": raw_state},
         follow_redirects=False,
     )
@@ -189,18 +189,18 @@ async def test_callback_refuses_deactivated_user(client, session):
 
 
 async def test_me_requires_login(client):
-    assert (await client.get("/api/platform/auth/me")).status_code == 401
+    assert (await client.get("/api/auth/me")).status_code == 401
 
 
 async def test_me_returns_profile_after_login(client, session):
     raw_state = await _start_login(client)
     await client.get(
-        "/api/platform/auth/feishu/callback",
+        "/api/auth/feishu/callback",
         params={"code": "the-code", "state": raw_state},
         follow_redirects=False,
     )
 
-    body = (await client.get("/api/platform/auth/me")).json()
+    body = (await client.get("/api/auth/me")).json()
 
     assert body["username"] == "zhang.san@lancha.com"
     assert body["display_name"] == "张三"
@@ -211,30 +211,30 @@ async def test_me_returns_profile_after_login(client, session):
 async def test_logout_clears_session(client, session):
     raw_state = await _start_login(client)
     login = await client.get(
-        "/api/platform/auth/feishu/callback",
+        "/api/auth/feishu/callback",
         params={"code": "the-code", "state": raw_state},
         follow_redirects=False,
     )
     old_cookie = login.cookies.get(SESSION_COOKIE)
 
-    assert (await client.post("/api/platform/auth/logout")).status_code == 204
+    assert (await client.post("/api/auth/logout")).status_code == 204
     # 响应会删 cookie，客户端 cookie 罐不可靠；手动塞回旧 token 证明服务端已撤销会话。
     client.cookies.set(SESSION_COOKIE, old_cookie)
-    assert (await client.get("/api/platform/auth/me")).status_code == 401
+    assert (await client.get("/api/auth/me")).status_code == 401
     assert (await session.execute(select(UserSession))).scalars().all() == []
 
 
 async def test_logout_only_revokes_current_device_session(client, session):
     raw_state = await _start_login(client)
     await client.get(
-        "/api/platform/auth/feishu/callback",
+        "/api/auth/feishu/callback",
         params={"code": "the-code", "state": raw_state},
         follow_redirects=False,
     )
     user = (await session.execute(select(AppUser))).scalars().one()
     other_device_token = await issue(session, user.id, timedelta(days=7))
 
-    assert (await client.post("/api/platform/auth/logout")).status_code == 204
+    assert (await client.post("/api/auth/logout")).status_code == 204
     client.cookies.set(SESSION_COOKIE, other_device_token)
-    assert (await client.get("/api/platform/auth/me")).status_code == 200
+    assert (await client.get("/api/auth/me")).status_code == 200
     assert len((await session.execute(select(UserSession))).scalars().all()) == 1

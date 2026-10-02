@@ -37,6 +37,12 @@ def test_rejects_invalid_module_name():
         validate_spec(_spec(name="Demo-1"), "Demo-1")
 
 
+@pytest.mark.parametrize("name", ["admin", "auth", "modules", "platform"])
+def test_rejects_reserved_platform_api_names(name):
+    with pytest.raises(ModuleLoadError, match="平台保留"):
+        validate_spec(_spec(name=name), name)
+
+
 def test_rejects_permission_without_module_prefix():
     with pytest.raises(ModuleLoadError, match="开头"):
         validate_spec(_spec(permissions=(PermissionDef("other:item:view", "查看"),)), "demo")

@@ -12,7 +12,7 @@ export const useSessionStore = defineStore('session', () => {
 
   async function load(): Promise<void> {
     try {
-      user.value = await request<SessionUser>('/platform/auth/me')
+      user.value = await request<SessionUser>('/auth/me')
     } catch (e) {
       if ((e as ApiError).status !== 401) throw e
       user.value = null
@@ -22,14 +22,14 @@ export const useSessionStore = defineStore('session', () => {
   }
 
   async function startFeishuLogin(): Promise<void> {
-    const { authorize_url } = await request<{ authorize_url: string }>('/platform/auth/feishu/login-url', {
+    const { authorize_url } = await request<{ authorize_url: string }>('/auth/feishu/login-url', {
       method: 'POST',
     })
     window.location.href = authorize_url
   }
 
   async function logout(): Promise<void> {
-    await request<void>('/platform/auth/logout', { method: 'POST' })
+    await request<void>('/auth/logout', { method: 'POST' })
     user.value = null
     loaded.value = false
     window.location.href = '/login'

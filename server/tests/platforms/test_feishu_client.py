@@ -34,7 +34,7 @@ def test_client_repr_does_not_expose_app_secret():
 
 def test_authorize_url_carries_client_id_state_and_scope():
     url = _client(lambda request: httpx.Response(200)).authorize_url(
-        "https://app.test/api/platform/auth/feishu/callback", "st4te", "auth:user.id:read"
+        "https://app.test/api/auth/feishu/callback", "st4te", "auth:user.id:read"
     )
 
     assert url.startswith("https://accounts.feishu.cn/open-apis/authen/v1/authorize?")

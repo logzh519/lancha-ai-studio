@@ -1,4 +1,4 @@
-/** 与后端 GET /api/platform/modules 的响应保持一致。 */
+/** 与后端 GET /api/modules 的响应保持一致。 */
 
 export interface MenuInfo {
   title: string

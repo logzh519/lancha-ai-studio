@@ -31,7 +31,7 @@ def test_feishu_mode_starts_with_full_configuration():
         auth_mode="feishu",
         feishu_app_id="cli_x",
         feishu_app_secret="secret",
-        feishu_redirect_uri="https://app.test/api/platform/auth/feishu/callback",
+        feishu_redirect_uri="https://app.test/api/auth/feishu/callback",
     )
     assert create_app(settings) is not None
 
@@ -42,7 +42,7 @@ async def test_auth_provider_is_scoped_to_each_app(monkeypatch):
             auth_mode="feishu",
             feishu_app_id="cli_x",
             feishu_app_secret="secret",
-            feishu_redirect_uri="https://app.test/api/platform/auth/feishu/callback",
+            feishu_redirect_uri="https://app.test/api/auth/feishu/callback",
         )
     )
     dev_app = create_app(Settings(auth_mode="dev_header"))

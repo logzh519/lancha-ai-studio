@@ -8,10 +8,10 @@ import importlib
 import re
 from pathlib import Path
 
-from platforms.auth.permissions import PLATFORM_MODULE_NAME
 from platforms.contract import ModuleSpec
 
 MODULE_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
+RESERVED_MODULE_NAMES = {"admin", "auth", "modules", "platform"}
 
 
 class ModuleLoadError(Exception):
@@ -34,8 +34,8 @@ def _import_spec(name: str, package: str) -> ModuleSpec:
 
 def validate_spec(spec: ModuleSpec, directory: str) -> None:
     """校验模块声明是否符合命名规范。"""
-    if spec.name == PLATFORM_MODULE_NAME:
-        raise ModuleLoadError(f"模块名 {PLATFORM_MODULE_NAME!r} 为平台保留，会与平台权限码撞进同一命名空间")
+    if spec.name in RESERVED_MODULE_NAMES:
+        raise ModuleLoadError(f"模块名 {spec.name!r} 为平台保留，不能用作业务 API 前缀")
     if spec.name != directory:
         raise ModuleLoadError(f"模块 {directory} 的 MODULE.name 为 {spec.name!r}，须与目录名一致")
     if not MODULE_NAME_PATTERN.match(spec.name):

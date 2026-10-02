@@ -37,7 +37,7 @@
 | `server/platforms/auth/oauth_state.py` | OAuth state 的创建与原子消费 |
 | `server/platforms/auth/feishu/client.py` | 授权 URL、code 换 token、拉 user_info |
 | `server/platforms/auth/permissions.py` | 平台自身的权限码与菜单声明 |
-| `server/platforms/auth/api.py` | `/api/platform/auth/*` 路由 |
+| `server/platforms/auth/api.py` | `/api/auth/*` 路由 |
 | `server/platforms/auth/admin_api.py` | 用户与角色管理路由 |
 
 后端修改：`config.py`（配置项）、`principal.py`（provider 签名与会话实现）、`gateway/app.py`（装配）、`gateway/api.py`（平台菜单）、`gateway/loader.py`（保留模块名）、`registry.py`（并入平台权限码）、`conftest.py`（还原全局 provider）、`requirements/base.txt`（httpx）。
@@ -814,7 +814,7 @@ def _client(handler) -> FeishuClient:
 
 def test_authorize_url_carries_client_id_state_and_scope():
     url = _client(lambda request: httpx.Response(200)).authorize_url(
-        "https://app.test/api/platform/auth/feishu/callback", "st4te", "auth:user.id:read"
+        "https://app.test/api/auth/feishu/callback", "st4te", "auth:user.id:read"
     )
 
     assert url.startswith("https://accounts.feishu.cn/open-apis/authen/v1/authorize?")
@@ -1044,7 +1044,7 @@ def test_feishu_mode_starts_with_full_configuration():
         auth_mode="feishu",
         feishu_app_id="cli_x",
         feishu_app_secret="secret",
-        feishu_redirect_uri="https://app.test/api/platform/auth/feishu/callback",
+        feishu_redirect_uri="https://app.test/api/auth/feishu/callback",
     )
     assert create_app(settings) is not None
 ```
@@ -1204,7 +1204,7 @@ git commit -m "feat: auth_mode 开关与基于会话的 principal provider"
 
 **Interfaces:**
 - Consumes: Task 2~6 的全部产出
-- Produces: `platforms.auth.api.router`，挂在 `/api/platform/auth`，含
+- Produces: `platforms.auth.api.router`，挂在 `/api/auth`，含
   `GET /config`、`POST /feishu/login-url`、`GET /feishu/callback`、`GET /me`、`POST /logout`；
   以及 `build_feishu_client(settings) -> FeishuClient`（测试通过 `app.dependency_overrides` 替换）
 
@@ -1237,7 +1237,7 @@ SETTINGS = Settings(
     auth_mode="feishu",
     feishu_app_id="cli_x",
     feishu_app_secret="secret",
-    feishu_redirect_uri="https://app.test/api/platform/auth/feishu/callback",
+    feishu_redirect_uri="https://app.test/api/auth/feishu/callback",
     frontend_base_url="https://app.test",
 )
 
@@ -1276,12 +1276,12 @@ async def client(session):
 
 
 async def test_config_reports_feishu_is_configured(client):
-    response = await client.get("/api/platform/auth/config")
+    response = await client.get("/api/auth/config")
     assert response.json() == {"feishu_configured": True}
 
 
 async def test_login_url_contains_state_and_redirect(client):
-    response = await client.post("/api/platform/auth/feishu/login-url")
+    response = await client.post("/api/auth/feishu/login-url")
     url = response.json()["authorize_url"]
     assert url.startswith("https://accounts.feishu.cn/open-apis/authen/v1/authorize?")
     assert "state=" in url
@@ -1291,7 +1291,7 @@ async def test_callback_creates_session_and_redirects_home(client, session):
     raw_state = await oauth_state.create(session, timedelta(minutes=10))
 
     response = await client.get(
-        "/api/platform/auth/feishu/callback",
+        "/api/auth/feishu/callback",
         params={"code": "the-code", "state": raw_state},
         follow_redirects=False,
     )
@@ -1306,13 +1306,13 @@ async def test_callback_creates_session_and_redirects_home(client, session):
 async def test_callback_rejects_replayed_state(client, session):
     raw_state = await oauth_state.create(session, timedelta(minutes=10))
     await client.get(
-        "/api/platform/auth/feishu/callback",
+        "/api/auth/feishu/callback",
         params={"code": "the-code", "state": raw_state},
         follow_redirects=False,
     )
 
     replayed = await client.get(
-        "/api/platform/auth/feishu/callback",
+        "/api/auth/feishu/callback",
         params={"code": "the-code", "state": raw_state},
         follow_redirects=False,
     )
@@ -1323,7 +1323,7 @@ async def test_callback_rejects_replayed_state(client, session):
 
 async def test_callback_with_authorization_error_redirects_to_login(client):
     response = await client.get(
-        "/api/platform/auth/feishu/callback",
+        "/api/auth/feishu/callback",
         params={"error": "access_denied", "state": "whatever"},
         follow_redirects=False,
     )
@@ -1336,7 +1336,7 @@ async def test_callback_refuses_deactivated_user(client, session):
     raw_state = await oauth_state.create(session, timedelta(minutes=10))
 
     response = await client.get(
-        "/api/platform/auth/feishu/callback",
+        "/api/auth/feishu/callback",
         params={"code": "the-code", "state": raw_state},
         follow_redirects=False,
     )
@@ -1347,18 +1347,18 @@ async def test_callback_refuses_deactivated_user(client, session):
 
 
 async def test_me_requires_login(client):
-    assert (await client.get("/api/platform/auth/me")).status_code == 401
+    assert (await client.get("/api/auth/me")).status_code == 401
 
 
 async def test_me_returns_profile_after_login(client, session):
     raw_state = await oauth_state.create(session, timedelta(minutes=10))
     await client.get(
-        "/api/platform/auth/feishu/callback",
+        "/api/auth/feishu/callback",
         params={"code": "the-code", "state": raw_state},
         follow_redirects=False,
     )
 
-    body = (await client.get("/api/platform/auth/me")).json()
+    body = (await client.get("/api/auth/me")).json()
 
     assert body["username"] == "zhang.san@lancha.com"
     assert body["display_name"] == "张三"
@@ -1369,35 +1369,35 @@ async def test_me_returns_profile_after_login(client, session):
 async def test_logout_clears_session(client, session):
     raw_state = await oauth_state.create(session, timedelta(minutes=10))
     login = await client.get(
-        "/api/platform/auth/feishu/callback",
+        "/api/auth/feishu/callback",
         params={"code": "the-code", "state": raw_state},
         follow_redirects=False,
     )
     old_cookie = login.cookies.get(SESSION_COOKIE)
 
-    assert (await client.post("/api/platform/auth/logout")).status_code == 204
+    assert (await client.post("/api/auth/logout")).status_code == 204
 
     # 响应里的 Set-Cookie 删除会清空 httpx 的 cookie 罐，光看 /me 是 401 证明不了服务端真的撤销了，
     # 所以把旧 token 塞回去再问一次。
     client.cookies.set(SESSION_COOKIE, old_cookie)
-    assert (await client.get("/api/platform/auth/me")).status_code == 401
+    assert (await client.get("/api/auth/me")).status_code == 401
     assert (await session.execute(select(UserSession))).scalars().all() == []
 
 
 async def test_logout_only_revokes_current_device_session(client, session):
     raw_state = await oauth_state.create(session, timedelta(minutes=10))
     await client.get(
-        "/api/platform/auth/feishu/callback",
+        "/api/auth/feishu/callback",
         params={"code": "the-code", "state": raw_state},
         follow_redirects=False,
     )
     user = (await session.execute(select(AppUser))).scalars().one()
     other_device_token = await issue(session, user.id, timedelta(days=1))
 
-    await client.post("/api/platform/auth/logout")
+    await client.post("/api/auth/logout")
 
     client.cookies.set(SESSION_COOKIE, other_device_token)
-    assert (await client.get("/api/platform/auth/me")).status_code == 200
+    assert (await client.get("/api/auth/me")).status_code == 200
     assert len((await session.execute(select(UserSession))).scalars().all()) == 1
 ```
 
@@ -1411,7 +1411,7 @@ Expected: FAIL，`ModuleNotFoundError: No module named 'platforms.auth.api'`
 创建 `server/platforms/auth/api.py`：
 
 ```python
-"""认证路由，挂在 /api/platform/auth 下。
+"""认证路由，挂在 /api/auth 下。
 
 回调是浏览器直接访问的地址，所以成功与失败都用 302 跳回前端，不返回 JSON——
 用户看到的应该是登录页上的一句中文，而不是一屏报文。
@@ -1548,7 +1548,7 @@ async def logout(
 在 `server/platforms/gateway/app.py` 中，`app.include_router(platform_router, ...)` 之后插入：
 
 ```python
-    app.include_router(auth_router, prefix="/api/platform/auth", tags=["platform"])
+    app.include_router(auth_router, prefix="/api/auth", tags=["platform"])
 ```
 
 顶部补 import：
@@ -1591,7 +1591,7 @@ git commit -m "feat: 飞书登录、会话下发与登出路由"
   - `platforms.auth.permissions.PLATFORM_PERMISSIONS: tuple[PermissionDef, ...]`（四个权限码）
   - `platforms.auth.permissions.PLATFORM_MENUS: tuple[MenuDef, ...]`（两个菜单）
   - `registry.all_permissions()` 返回值包含平台权限码
-  - `GET /api/platform/modules` 响应新增 `platform_menus` 字段
+  - `GET /api/modules` 响应新增 `platform_menus` 字段
   - `loader.load_modules()` 拒绝名为 `platform` 的模块
 
 - [ ] **Step 1: 写失败的测试**
@@ -1663,14 +1663,14 @@ async def _user(session, *, codes: tuple[str, ...] = ()) -> AppUser:
 @pytest.mark.db
 async def test_user_without_permission_sees_no_platform_menu(client, session):
     user = await _user(session)
-    body = (await client.get("/api/platform/modules", headers={"X-User-Id": str(user.id)})).json()
+    body = (await client.get("/api/modules", headers={"X-User-Id": str(user.id)})).json()
     assert body["platform_menus"] == []
 
 
 @pytest.mark.db
 async def test_user_with_permission_sees_platform_menu(client, session):
     user = await _user(session, codes=("platform:user:view",))
-    body = (await client.get("/api/platform/modules", headers={"X-User-Id": str(user.id)})).json()
+    body = (await client.get("/api/modules", headers={"X-User-Id": str(user.id)})).json()
     assert [menu["path"] for menu in body["platform_menus"]] == ["/platform/users"]
 ```
 
@@ -1801,7 +1801,7 @@ git commit -m "feat: 平台自身的权限码与系统管理菜单"
 
 **Interfaces:**
 - Consumes: Task 8 的权限码；现有 `require()`
-- Produces: `platforms.auth.admin_api.router`，挂在 `/api/platform`，含
+- Produces: `platforms.auth.admin_api.router`，挂在 `/api/admin`，含
   `GET /users`、`PATCH /users/{user_id}/roles`、`PATCH /users/{user_id}/active`、
   `GET /roles`、`POST /roles`、`PATCH /roles/{role_id}`、`DELETE /roles/{role_id}`、`GET /permissions`
 
@@ -1854,12 +1854,12 @@ def _as(user: AppUser) -> dict:
 
 async def test_user_list_requires_permission(client, session):
     plain = await _user(session, "plain")
-    assert (await client.get("/api/platform/users", headers=_as(plain))).status_code == 403
+    assert (await client.get("/api/admin/users", headers=_as(plain))).status_code == 403
 
 
 async def test_superuser_can_list_users(client, session):
     admin = await _user(session, "admin", superuser=True)
-    body = (await client.get("/api/platform/users", headers=_as(admin))).json()
+    body = (await client.get("/api/admin/users", headers=_as(admin))).json()
     assert any(item["username"] == "admin" for item in body)
 
 
@@ -1874,18 +1874,18 @@ async def test_assigning_role_grants_permission_codes(client, session):
     await session.flush()
 
     response = await client.patch(
-        f"/api/platform/users/{target.id}/roles", json={"role_ids": [role.id]}, headers=_as(admin)
+        f"/api/admin/users/{target.id}/roles", json={"role_ids": [role.id]}, headers=_as(admin)
     )
 
     assert response.status_code == 200
-    modules = (await client.get("/api/platform/modules", headers=_as(target))).json()
+    modules = (await client.get("/api/modules", headers=_as(target))).json()
     assert "example:item:view" in modules["permissions"]
 
 
 async def test_cannot_deactivate_self(client, session):
     admin = await _user(session, "admin3", superuser=True)
     response = await client.patch(
-        f"/api/platform/users/{admin.id}/active", json={"is_active": False}, headers=_as(admin)
+        f"/api/admin/users/{admin.id}/active", json={"is_active": False}, headers=_as(admin)
     )
     assert response.status_code == 400
 
@@ -1894,9 +1894,9 @@ async def test_deactivated_user_loses_access(client, session):
     admin = await _user(session, "admin4", superuser=True)
     target = await _user(session, "target4")
 
-    await client.patch(f"/api/platform/users/{target.id}/active", json={"is_active": False}, headers=_as(admin))
+    await client.patch(f"/api/admin/users/{target.id}/active", json={"is_active": False}, headers=_as(admin))
 
-    assert (await client.get("/api/platform/users", headers=_as(target))).status_code == 403
+    assert (await client.get("/api/admin/users", headers=_as(target))).status_code == 403
 
 
 async def test_role_crud_round_trip(client, session):
@@ -1906,26 +1906,26 @@ async def test_role_crud_round_trip(client, session):
     await session.flush()
 
     created = await client.post(
-        "/api/platform/roles",
+        "/api/admin/roles",
         json={"code": "editor", "name": "编辑", "description": "", "permission_ids": [permission.id]},
         headers=_as(admin),
     )
     assert created.status_code == 201
     role_id = created.json()["id"]
 
-    listed = (await client.get("/api/platform/roles", headers=_as(admin))).json()
+    listed = (await client.get("/api/admin/roles", headers=_as(admin))).json()
     assert [role for role in listed if role["id"] == role_id][0]["permission_ids"] == [permission.id]
 
     updated = await client.patch(
-        f"/api/platform/roles/{role_id}",
+        f"/api/admin/roles/{role_id}",
         json={"name": "编辑（改名）", "description": "", "permission_ids": []},
         headers=_as(admin),
     )
     assert updated.json()["name"] == "编辑（改名）"
     assert updated.json()["permission_ids"] == []
 
-    assert (await client.delete(f"/api/platform/roles/{role_id}", headers=_as(admin))).status_code == 204
-    assert all(role["id"] != role_id for role in (await client.get("/api/platform/roles", headers=_as(admin))).json())
+    assert (await client.delete(f"/api/admin/roles/{role_id}", headers=_as(admin))).status_code == 204
+    assert all(role["id"] != role_id for role in (await client.get("/api/admin/roles", headers=_as(admin))).json())
 
 
 async def test_duplicate_role_code_is_rejected(client, session):
@@ -1933,7 +1933,7 @@ async def test_duplicate_role_code_is_rejected(client, session):
     await _role(session, "dup")
 
     response = await client.post(
-        "/api/platform/roles",
+        "/api/admin/roles",
         json={"code": "dup", "name": "重复", "description": "", "permission_ids": []},
         headers=_as(admin),
     )
@@ -1945,7 +1945,7 @@ async def test_permission_list_is_grouped_by_module(client, session):
     session.add(Permission(code="example:item:view", name="查看条目", module="example"))
     await session.flush()
 
-    body = (await client.get("/api/platform/permissions", headers=_as(admin))).json()
+    body = (await client.get("/api/admin/permissions", headers=_as(admin))).json()
 
     assert any(group["module"] == "example" for group in body)
 
@@ -1957,9 +1957,9 @@ async def test_deleting_role_removes_user_binding(client, session):
     session.add(UserRole(user_id=target.id, role_id=role.id))
     await session.flush()
 
-    await client.delete(f"/api/platform/roles/{role.id}", headers=_as(admin))
+    await client.delete(f"/api/admin/roles/{role.id}", headers=_as(admin))
 
-    users = (await client.get("/api/platform/users", headers=_as(admin))).json()
+    users = (await client.get("/api/admin/users", headers=_as(admin))).json()
     assert [u for u in users if u["id"] == target.id][0]["role_ids"] == []
 ```
 
@@ -1973,7 +1973,7 @@ Expected: FAIL，`ModuleNotFoundError: No module named 'platforms.auth.admin_api
 创建 `server/platforms/auth/admin_api.py`：
 
 ```python
-"""用户与角色管理，挂在 /api/platform 下。
+"""用户与角色管理，挂在 /api/admin 下。
 
 资料字段来自飞书，这里只管「能不能进」和「能看见什么」，不提供编辑姓名头像的入口——
 本地改了下次登录就被覆盖，留着只会让人困惑。
@@ -2197,7 +2197,7 @@ async def list_permissions(session: AsyncSession = Depends(get_session)):
 在 `server/platforms/gateway/app.py` 中 `auth_router` 那行之后插入：
 
 ```python
-    app.include_router(admin_router, prefix="/api/platform", tags=["platform"])
+    app.include_router(admin_router, prefix="/api/admin", tags=["platform"])
 ```
 
 顶部补 import：
@@ -2238,7 +2238,7 @@ git commit -m "feat: 用户与角色管理接口"
 - Modify: `web/src/shared/core/platform.ts`
 
 **Interfaces:**
-- Consumes: Task 7 的 `/api/platform/auth/me`、`/logout`、`/feishu/login-url`、`/config`
+- Consumes: Task 7 的 `/api/auth/me`、`/logout`、`/feishu/login-url`、`/config`
 - Produces:
   - `SessionUser`：`{ id: number; username: string; display_name: string; avatar_url: string; superuser: boolean }`
   - `useSessionStore()`：`user` / `loaded` / `load()` / `logout()` / `startFeishuLogin()`
@@ -2299,7 +2299,7 @@ export const useSessionStore = defineStore('session', () => {
 
   async function load(): Promise<void> {
     try {
-      user.value = await request<SessionUser>('/platform/auth/me')
+      user.value = await request<SessionUser>('/auth/me')
     } catch (e) {
       if ((e as ApiError).status !== 401) throw e
       user.value = null
@@ -2309,14 +2309,14 @@ export const useSessionStore = defineStore('session', () => {
   }
 
   async function startFeishuLogin(): Promise<void> {
-    const { authorize_url } = await request<{ authorize_url: string }>('/platform/auth/feishu/login-url', {
+    const { authorize_url } = await request<{ authorize_url: string }>('/auth/feishu/login-url', {
       method: 'POST',
     })
     window.location.href = authorize_url
   }
 
   async function logout(): Promise<void> {
-    await request<void>('/platform/auth/logout', { method: 'POST' })
+    await request<void>('/auth/logout', { method: 'POST' })
     user.value = null
     loaded.value = false
     window.location.href = '/login'
@@ -2558,7 +2558,7 @@ const starting = ref(false)
 
 onMounted(async () => {
   try {
-    const config = await fetch('/api/platform/auth/config').then((r) => r.json())
+    const config = await fetch('/api/auth/config').then((r) => r.json())
     feishuConfigured.value = config.feishu_configured
   } catch {
     feishuConfigured.value = false
@@ -2837,25 +2837,25 @@ export interface PermissionGroup {
   permissions: Array<{ id: number; code: string; name: string }>
 }
 
-export const listUsers = () => request<ManagedUser[]>('/platform/users')
+export const listUsers = () => request<ManagedUser[]>('/admin/users')
 
 export const setUserRoles = (id: number, roleIds: number[]) =>
-  request<void>(`/platform/users/${id}/roles`, { method: 'PATCH', body: JSON.stringify({ role_ids: roleIds }) })
+  request<void>(`/admin/users/${id}/roles`, { method: 'PATCH', body: JSON.stringify({ role_ids: roleIds }) })
 
 export const setUserActive = (id: number, isActive: boolean) =>
-  request<void>(`/platform/users/${id}/active`, { method: 'PATCH', body: JSON.stringify({ is_active: isActive }) })
+  request<void>(`/admin/users/${id}/active`, { method: 'PATCH', body: JSON.stringify({ is_active: isActive }) })
 
-export const listRoles = () => request<ManagedRole[]>('/platform/roles')
+export const listRoles = () => request<ManagedRole[]>('/admin/roles')
 
 export const createRole = (payload: Omit<ManagedRole, 'id' | 'user_count'>) =>
-  request<ManagedRole>('/platform/roles', { method: 'POST', body: JSON.stringify(payload) })
+  request<ManagedRole>('/admin/roles', { method: 'POST', body: JSON.stringify(payload) })
 
 export const updateRole = (id: number, payload: Omit<ManagedRole, 'id' | 'code' | 'user_count'>) =>
-  request<ManagedRole>(`/platform/roles/${id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+  request<ManagedRole>(`/admin/roles/${id}`, { method: 'PATCH', body: JSON.stringify(payload) })
 
-export const deleteRole = (id: number) => request<void>(`/platform/roles/${id}`, { method: 'DELETE' })
+export const deleteRole = (id: number) => request<void>(`/admin/roles/${id}`, { method: 'DELETE' })
 
-export const listPermissions = () => request<PermissionGroup[]>('/platform/permissions')
+export const listPermissions = () => request<PermissionGroup[]>('/admin/permissions')
 ```
 
 - [ ] **Step 2: 用户管理页**
@@ -3420,7 +3420,7 @@ FEISHU_APP_ID=
 FEISHU_APP_SECRET=
 # 飞书会把浏览器直接重定向到这里，开发期必须填前端地址（经 Vite 代理转发），
 # 填后端地址会让 cookie 落在后端域下，前端带不过去，表现为「回调成功但仍未登录」
-FEISHU_REDIRECT_URI=http://localhost:5173/api/platform/auth/feishu/callback
+FEISHU_REDIRECT_URI=http://localhost:5173/api/auth/feishu/callback
 FEISHU_SCOPE=auth:user.id:read contact:user.employee:readonly
 
 # 会话有效期；生产环境走 HTTPS 时把 COOKIE_SECURE 置为 true

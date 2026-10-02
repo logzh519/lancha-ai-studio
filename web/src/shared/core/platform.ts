@@ -22,7 +22,7 @@ export const usePlatformStore = defineStore('platform', () => {
 
   async function load(): Promise<void> {
     if (loaded.value) return
-    const profile = await request<PlatformProfile>('/platform/modules')
+    const profile = await request<PlatformProfile>('/modules')
     modules.value = profile.modules
     platformMenus.value = profile.platform_menus
     permissions.value = new Set(profile.permissions)

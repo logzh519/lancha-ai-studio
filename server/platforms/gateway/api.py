@@ -1,4 +1,4 @@
-"""平台自身的接口，挂在 /api/platform 下。"""
+"""平台模块目录、权限与菜单信息接口，挂在 /api 下。"""
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession

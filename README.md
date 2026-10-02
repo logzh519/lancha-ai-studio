@@ -36,7 +36,7 @@ VALUES ('admin', 'admin', true, true);
 
 切换到飞书登录：在 `server/.env` 里设 `AUTH_MODE=feishu` 并填齐 `FEISHU_APP_ID` /
 `FEISHU_APP_SECRET` / `FEISHU_REDIRECT_URI`（缺一项后端启动即报错），同时删掉 `web/.env.local` 的 `VITE_DEV_USER_ID`。
-开发期 `FEISHU_REDIRECT_URI` 填 `http://localhost:5173/api/platform/auth/feishu/callback`（前端地址，经 Vite 代理转发），
+开发期 `FEISHU_REDIRECT_URI` 填 `http://localhost:5173/api/auth/feishu/callback`（前端地址，经 Vite 代理转发），
 飞书开放平台的重定向 URL 要与它完全一致。
 
 第一个超级管理员仍然手工指定——先用飞书扫码登录一次，再执行：

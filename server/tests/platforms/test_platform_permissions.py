@@ -24,10 +24,11 @@ def test_platform_menu_paths_match_declared_permissions():
         assert menu.permission in declared
 
 
-def test_module_named_platform_is_rejected():
-    spec = ModuleSpec(name="platform", title="冒充平台")
-    with pytest.raises(ModuleLoadError, match="platform"):
-        validate_spec(spec, "platform")
+@pytest.mark.parametrize("name", ["admin", "auth", "modules", "platform"])
+def test_platform_api_names_are_reserved(name):
+    spec = ModuleSpec(name=name, title="平台保留名")
+    with pytest.raises(ModuleLoadError, match="平台保留"):
+        validate_spec(spec, name)
 
 
 @pytest.fixture
@@ -63,12 +64,12 @@ async def _user(session, *, codes: tuple[str, ...] = ()) -> AppUser:
 @pytest.mark.db
 async def test_user_without_permission_sees_no_platform_menu(client, session):
     user = await _user(session)
-    body = (await client.get("/api/platform/modules", headers={"X-User-Id": str(user.id)})).json()
+    body = (await client.get("/api/modules", headers={"X-User-Id": str(user.id)})).json()
     assert body["platform_menus"] == []
 
 
 @pytest.mark.db
 async def test_user_with_permission_sees_platform_menu(client, session):
     user = await _user(session, codes=("platform:user:view",))
-    body = (await client.get("/api/platform/modules", headers={"X-User-Id": str(user.id)})).json()
+    body = (await client.get("/api/modules", headers={"X-User-Id": str(user.id)})).json()
     assert [menu["path"] for menu in body["platform_menus"]] == ["/platform/users"]

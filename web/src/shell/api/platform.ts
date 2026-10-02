@@ -28,22 +28,22 @@ export interface PermissionGroup {
   permissions: Array<{ id: number; code: string; name: string }>
 }
 
-export const listUsers = () => request<ManagedUser[]>('/platform/users')
+export const listUsers = () => request<ManagedUser[]>('/admin/users')
 
 export const setUserRoles = (id: number, roleIds: number[]) =>
-  request<void>(`/platform/users/${id}/roles`, { method: 'PATCH', body: JSON.stringify({ role_ids: roleIds }) })
+  request<void>(`/admin/users/${id}/roles`, { method: 'PATCH', body: JSON.stringify({ role_ids: roleIds }) })
 
 export const setUserActive = (id: number, isActive: boolean) =>
-  request<void>(`/platform/users/${id}/active`, { method: 'PATCH', body: JSON.stringify({ is_active: isActive }) })
+  request<void>(`/admin/users/${id}/active`, { method: 'PATCH', body: JSON.stringify({ is_active: isActive }) })
 
-export const listRoles = () => request<ManagedRole[]>('/platform/roles')
+export const listRoles = () => request<ManagedRole[]>('/admin/roles')
 
 export const createRole = (payload: Omit<ManagedRole, 'id' | 'user_count'>) =>
-  request<ManagedRole>('/platform/roles', { method: 'POST', body: JSON.stringify(payload) })
+  request<ManagedRole>('/admin/roles', { method: 'POST', body: JSON.stringify(payload) })
 
 export const updateRole = (id: number, payload: Omit<ManagedRole, 'id' | 'code' | 'user_count'>) =>
-  request<ManagedRole>(`/platform/roles/${id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+  request<ManagedRole>(`/admin/roles/${id}`, { method: 'PATCH', body: JSON.stringify(payload) })
 
-export const deleteRole = (id: number) => request<void>(`/platform/roles/${id}`, { method: 'DELETE' })
+export const deleteRole = (id: number) => request<void>(`/admin/roles/${id}`, { method: 'DELETE' })
 
-export const listPermissions = () => request<PermissionGroup[]>('/platform/permissions')
+export const listPermissions = () => request<PermissionGroup[]>('/admin/permissions')

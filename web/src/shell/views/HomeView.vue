@@ -8,7 +8,7 @@ const platform = usePlatformStore()
   <section>
     <h1>已启用的模块</h1>
     <p v-if="platform.modules.length === 0" class="weak">
-      没有取到模块信息，确认后端已启动且 /api/platform/modules 可访问。
+      没有取到模块信息，确认后端已启动且 /api/modules 可访问。
     </p>
     <ul>
       <li v-for="module in platform.modules" :key="module.name">

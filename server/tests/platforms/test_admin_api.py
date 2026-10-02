@@ -53,12 +53,12 @@ def _as(user: AppUser) -> dict:
 
 async def test_user_list_requires_permission(client, session):
     plain = await _user(session, "plain")
-    assert (await client.get("/api/platform/users", headers=_as(plain))).status_code == 403
+    assert (await client.get("/api/admin/users", headers=_as(plain))).status_code == 403
 
 
 async def test_superuser_can_list_users(client, session):
     admin = await _user(session, "admin", superuser=True)
-    body = (await client.get("/api/platform/users", headers=_as(admin))).json()
+    body = (await client.get("/api/admin/users", headers=_as(admin))).json()
     assert any(item["username"] == "admin" for item in body)
 
 
@@ -73,18 +73,18 @@ async def test_assigning_role_grants_permission_codes(client, session):
     await session.flush()
 
     response = await client.patch(
-        f"/api/platform/users/{target.id}/roles", json={"role_ids": [role.id]}, headers=_as(admin)
+        f"/api/admin/users/{target.id}/roles", json={"role_ids": [role.id]}, headers=_as(admin)
     )
 
     assert response.status_code == 200
-    modules = (await client.get("/api/platform/modules", headers=_as(target))).json()
+    modules = (await client.get("/api/modules", headers=_as(target))).json()
     assert "example:item:view" in modules["permissions"]
 
 
 async def test_cannot_deactivate_self(client, session):
     admin = await _user(session, "admin3", superuser=True)
     response = await client.patch(
-        f"/api/platform/users/{admin.id}/active", json={"is_active": False}, headers=_as(admin)
+        f"/api/admin/users/{admin.id}/active", json={"is_active": False}, headers=_as(admin)
     )
     assert response.status_code == 400
 
@@ -105,11 +105,11 @@ async def test_deactivated_user_loses_access(client, session):
     await session.flush()
 
     # 停用前必须有权限，否则 403 与是否停用无关，测不出差异
-    assert (await client.get("/api/platform/users", headers=_as(target))).status_code == 200
+    assert (await client.get("/api/admin/users", headers=_as(target))).status_code == 200
 
-    await client.patch(f"/api/platform/users/{target.id}/active", json={"is_active": False}, headers=_as(admin))
+    await client.patch(f"/api/admin/users/{target.id}/active", json={"is_active": False}, headers=_as(admin))
 
-    assert (await client.get("/api/platform/users", headers=_as(target))).status_code == 403
+    assert (await client.get("/api/admin/users", headers=_as(target))).status_code == 403
 
 
 async def test_role_crud_round_trip(client, session):
@@ -119,26 +119,26 @@ async def test_role_crud_round_trip(client, session):
     await session.flush()
 
     created = await client.post(
-        "/api/platform/roles",
+        "/api/admin/roles",
         json={"code": "editor", "name": "编辑", "description": "", "permission_ids": [permission.id]},
         headers=_as(admin),
     )
     assert created.status_code == 201
     role_id = created.json()["id"]
 
-    listed = (await client.get("/api/platform/roles", headers=_as(admin))).json()
+    listed = (await client.get("/api/admin/roles", headers=_as(admin))).json()
     assert [role for role in listed if role["id"] == role_id][0]["permission_ids"] == [permission.id]
 
     updated = await client.patch(
-        f"/api/platform/roles/{role_id}",
+        f"/api/admin/roles/{role_id}",
         json={"name": "编辑（改名）", "description": "", "permission_ids": []},
         headers=_as(admin),
     )
     assert updated.json()["name"] == "编辑（改名）"
     assert updated.json()["permission_ids"] == []
 
-    assert (await client.delete(f"/api/platform/roles/{role_id}", headers=_as(admin))).status_code == 204
-    assert all(role["id"] != role_id for role in (await client.get("/api/platform/roles", headers=_as(admin))).json())
+    assert (await client.delete(f"/api/admin/roles/{role_id}", headers=_as(admin))).status_code == 204
+    assert all(role["id"] != role_id for role in (await client.get("/api/admin/roles", headers=_as(admin))).json())
 
 
 async def test_duplicate_role_code_is_rejected(client, session):
@@ -146,7 +146,7 @@ async def test_duplicate_role_code_is_rejected(client, session):
     await _role(session, "dup")
 
     response = await client.post(
-        "/api/platform/roles",
+        "/api/admin/roles",
         json={"code": "dup", "name": "重复", "description": "", "permission_ids": []},
         headers=_as(admin),
     )
@@ -158,7 +158,7 @@ async def test_permission_list_is_grouped_by_module(client, session):
     session.add(Permission(code="example:item:view", name="查看条目", module="example"))
     await session.flush()
 
-    body = (await client.get("/api/platform/permissions", headers=_as(admin))).json()
+    body = (await client.get("/api/admin/permissions", headers=_as(admin))).json()
 
     assert any(group["module"] == "example" for group in body)
 
@@ -170,9 +170,9 @@ async def test_deleting_role_removes_user_binding(client, session):
     session.add(UserRole(user_id=target.id, role_id=role.id))
     await session.flush()
 
-    await client.delete(f"/api/platform/roles/{role.id}", headers=_as(admin))
+    await client.delete(f"/api/admin/roles/{role.id}", headers=_as(admin))
 
-    users = (await client.get("/api/platform/users", headers=_as(admin))).json()
+    users = (await client.get("/api/admin/users", headers=_as(admin))).json()
     assert [u for u in users if u["id"] == target.id][0]["role_ids"] == []
 
 
@@ -189,7 +189,7 @@ async def test_deactivating_user_deletes_their_sessions(client, session):
     )
     await session.flush()
 
-    await client.patch(f"/api/platform/users/{target.id}/active", json={"is_active": False}, headers=_as(admin))
+    await client.patch(f"/api/admin/users/{target.id}/active", json={"is_active": False}, headers=_as(admin))
 
     remaining = set((await session.execute(select(UserSession.user_id))).scalars())
     assert target.id not in remaining
@@ -201,11 +201,11 @@ async def test_write_endpoints_require_manage_permission(client, session):
     target = await _user(session, "target10")
     role = await _role(session, "r10")
     calls = [
-        ("PATCH", f"/api/platform/users/{target.id}/roles", {"role_ids": []}),
-        ("PATCH", f"/api/platform/users/{target.id}/active", {"is_active": False}),
-        ("POST", "/api/platform/roles", {"code": "x10", "name": "x", "permission_ids": []}),
-        ("PATCH", f"/api/platform/roles/{role.id}", {"name": "x", "permission_ids": []}),
-        ("DELETE", f"/api/platform/roles/{role.id}", None),
+        ("PATCH", f"/api/admin/users/{target.id}/roles", {"role_ids": []}),
+        ("PATCH", f"/api/admin/users/{target.id}/active", {"is_active": False}),
+        ("POST", "/api/admin/roles", {"code": "x10", "name": "x", "permission_ids": []}),
+        ("PATCH", f"/api/admin/roles/{role.id}", {"name": "x", "permission_ids": []}),
+        ("DELETE", f"/api/admin/roles/{role.id}", None),
     ]
     for method, url, body in calls:
         response = await client.request(method, url, json=body, headers=_as(plain))
@@ -217,22 +217,22 @@ async def test_unknown_references_are_rejected(client, session):
     target = await _user(session, "target11")
 
     assert (
-        await client.patch(f"/api/platform/users/{target.id}/roles", json={"role_ids": [999999]}, headers=_as(admin))
+        await client.patch(f"/api/admin/users/{target.id}/roles", json={"role_ids": [999999]}, headers=_as(admin))
     ).status_code == 400
     assert (
-        await client.patch("/api/platform/users/999999/roles", json={"role_ids": []}, headers=_as(admin))
+        await client.patch("/api/admin/users/999999/roles", json={"role_ids": []}, headers=_as(admin))
     ).status_code == 404
     assert (
-        await client.patch("/api/platform/users/999999/active", json={"is_active": False}, headers=_as(admin))
+        await client.patch("/api/admin/users/999999/active", json={"is_active": False}, headers=_as(admin))
     ).status_code == 404
     assert (
         await client.post(
-            "/api/platform/roles",
+            "/api/admin/roles",
             json={"code": "bad11", "name": "x", "permission_ids": [999999]},
             headers=_as(admin),
         )
     ).status_code == 400
-    assert (await client.delete("/api/platform/roles/999999", headers=_as(admin))).status_code == 404
+    assert (await client.delete("/api/admin/roles/999999", headers=_as(admin))).status_code == 404
 
 
 async def test_update_role_keeps_user_count(client, session):
@@ -243,7 +243,7 @@ async def test_update_role_keeps_user_count(client, session):
     await session.flush()
 
     updated = await client.patch(
-        f"/api/platform/roles/{role.id}", json={"name": "改名", "permission_ids": []}, headers=_as(admin)
+        f"/api/admin/roles/{role.id}", json={"name": "改名", "permission_ids": []}, headers=_as(admin)
     )
 
     assert updated.json()["user_count"] == 1

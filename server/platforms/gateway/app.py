@@ -94,9 +94,9 @@ def create_app(settings: Settings | None = None, package: str = "modules") -> Fa
     async def health():
         return {"status": "ok", "modules": [spec.name for spec in modules]}
 
-    app.include_router(platform_router, prefix="/api/platform", tags=["platform"])
-    app.include_router(auth_router, prefix="/api/platform/auth", tags=["platform"])
-    app.include_router(admin_router, prefix="/api/platform", tags=["platform"])
+    app.include_router(platform_router, prefix="/api", tags=["platform"])
+    app.include_router(auth_router, prefix="/api/auth", tags=["platform"])
+    app.include_router(admin_router, prefix="/api/admin", tags=["platform"])
     for spec in modules:
         if spec.router is not None:
             app.include_router(spec.router, prefix=f"/api/{spec.name}", tags=[spec.name])

@@ -96,10 +96,10 @@ async def test_request_with_permission_passes(client, session):
 
 async def test_menus_are_filtered_by_permission(client, session):
     plain = await _make_user(session)
-    response = await client.get("/api/platform/modules", headers={"X-User-Id": str(plain.id)})
+    response = await client.get("/api/modules", headers={"X-User-Id": str(plain.id)})
     assert response.json()["modules"][0]["menus"] == []
 
     granted = await _make_user(session, codes=("example:item:view",))
-    response = await client.get("/api/platform/modules", headers={"X-User-Id": str(granted.id)})
+    response = await client.get("/api/modules", headers={"X-User-Id": str(granted.id)})
     menus = response.json()["modules"][0]["menus"]
     assert [menu["path"] for menu in menus] == ["/example/items"]
