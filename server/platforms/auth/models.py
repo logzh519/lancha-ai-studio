@@ -20,6 +20,9 @@ class TimestampMixin:
 
 
 class AppUser(TimestampMixin, Base):
+    """
+    平台内部账户主表。没有密码或外部 access token；所有授权和会话最终关联它的 ID。
+    """
     __tablename__ = "user"
     __table_args__ = {"schema": PLATFORM_SCHEMA}
 
@@ -31,6 +34,7 @@ class AppUser(TimestampMixin, Base):
 
 
 class Role(TimestampMixin, Base):
+    """可分配给用户的一组授权集合。"""
     __tablename__ = "role"
     __table_args__ = {"schema": PLATFORM_SCHEMA}
 
@@ -53,6 +57,7 @@ class Permission(Base):
 
 
 class UserRole(Base):
+    """用户与角色的多对多关联；删除用户或角色时关联级联清理。"""
     __tablename__ = "user_role"
     __table_args__ = (
         UniqueConstraint("user_id", "role_id", name="uq_user_role"),
