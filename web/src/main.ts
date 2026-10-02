@@ -12,7 +12,7 @@ async function bootstrap(): Promise<void> {
   app.use(createPinia())
   app.directive('permission', permission)
 
-  const modules = loadModules()
+  const modules = await loadModules()
   const router = createAppRouter(modules)
   app.use(router)
   await router.isReady()

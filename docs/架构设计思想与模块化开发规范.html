@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="lancha-ai-studio 架构设计思想、工程结构与模块化开发规范">
+<title>架构设计思想与模块化开发规范 · Lancha AI Studio</title>
+<style>
+  :root {
+    --ink: #162c2a;
+    --muted: #526866;
+    --line: #d5e1dc;
+    --paper: #fbfcf8;
+    --canvas: #e9f0eb;
+    --green: #176b55;
+    --green-soft: #e2f1e9;
+    --cyan: #dff2f1;
+    --gold: #f3c45c;
+    --gold-soft: #fff3d3;
+    --coral: #b4563e;
+    --coral-soft: #f9e8e1;
+    --mono: "Cascadia Code", Consolas, "SFMono-Regular", monospace;
+    --sans: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    background: var(--canvas);
+    font-family: var(--sans);
+    line-height: 1.75;
+  }
+  a { color: inherit; }
+  .page { max-width: 1240px; margin: 0 auto; padding: 28px 28px 72px; }
+  .masthead {
+    position: relative;
+    overflow: hidden;
+    padding: 48px 52px 44px;
+    border: 1px solid #bdd2c8;
+    background: var(--paper);
+  }
+  .masthead::after {
+    content: "";
+    position: absolute;
+    width: 360px;
+    height: 360px;
+    right: -100px;
+    top: -165px;
+    border: 1px solid #8bb7a3;
+    border-radius: 50%;
+    box-shadow: 0 0 0 28px #edf5ef, 0 0 0 56px #f5f8f2;
+    opacity: .8;
+  }
+  .eyebrow, .section-kicker {
+    color: var(--green);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .masthead h1 {
+    position: relative;
+    z-index: 1;
+    max-width: 760px;
+    margin: 16px 0 12px;
+    font-family: Georgia, "Songti SC", "SimSun", serif;
+    font-size: clamp(34px, 5vw, 58px);
+    line-height: 1.2;
+    font-weight: 700;
+  }
+  .masthead p { position: relative; z-index: 1; max-width: 720px; margin: 0; color: var(--muted); font-size: 17px; }
+  .mast-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 26px; position: relative; z-index: 1; }
+  .mast-meta span { padding: 5px 10px; border: 1px solid var(--line); color: var(--muted); font-size: 12px; background: #fff; }
+  .contents {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 14px 18px;
+    margin: 14px 0 30px;
+    background: var(--ink);
+  }
+  .contents a { color: #e8f4ee; padding: 4px 9px; text-decoration: none; font-size: 12px; }
+  .contents a:hover { background: #285348; }
+  section { margin-top: 40px; scroll-margin-top: 20px; }
+  .section-head { display: grid; grid-template-columns: 58px 1fr; align-items: start; gap: 14px; margin-bottom: 16px; }
+  .section-no { color: var(--green); font: 700 14px var(--mono); padding-top: 8px; }
+  h2 { margin: 0; font-family: Georgia, "Songti SC", "SimSun", serif; font-size: 29px; line-height: 1.3; }
+  .section-intro { max-width: 860px; color: var(--muted); margin: 7px 0 0; }
+  .lead-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 14px; }
+  .lead {
+    min-height: 220px;
+    padding: 25px 28px;
+    background: var(--green);
+    color: white;
+  }
+  .lead .label { color: #c3e8d4; font-size: 12px; font-weight: 700; }
+  .lead h3 { max-width: 570px; margin: 12px 0; font: 700 26px/1.45 Georgia, "Songti SC", serif; }
+  .lead p { max-width: 630px; margin: 0; color: #e0eee7; }
+  .decision-list { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .decision { padding: 17px 19px; background: var(--paper); }
+  .decision b { display: block; margin-bottom: 4px; }
+  .decision span { color: var(--muted); font-size: 13px; }
+  .principles { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); background: var(--paper); }
+  .principle { min-height: 188px; padding: 20px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .principle:nth-child(3n) { border-right: 0; }
+  .principle .num { color: var(--green); font: 700 12px var(--mono); }
+  .principle h3 { margin: 8px 0 5px; font-size: 17px; }
+  .principle p { margin: 0; color: var(--muted); font-size: 13px; }
+  .diagram-wrap { padding: 24px; border: 1px solid var(--line); background: var(--paper); }
+  .architecture { display: grid; gap: 10px; }
+  .arch-band { display: grid; grid-template-columns: 150px 1fr; border: 1px solid var(--line); }
+  .arch-label { padding: 15px; font-size: 13px; font-weight: 800; display: flex; flex-direction: column; justify-content: center; }
+  .arch-label small { font-size: 11px; font-weight: 500; opacity: .8; }
+  .arch-items { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 10px; }
+  .arch-item { padding: 10px 12px; border: 1px solid #dce6e1; background: #fff; }
+  .arch-item b { display: block; font-size: 13px; }
+  .arch-item span { color: var(--muted); font-size: 11px; }
+  .band-ui { background: var(--cyan); color: #155d58; }
+  .band-gateway { background: #edf1eb; color: #435950; }
+  .band-module { background: var(--green-soft); color: #205d45; }
+  .band-platform { background: #e9eee7; color: #3c5146; }
+  .band-data { background: var(--gold-soft); color: #79591d; }
+  .band-external { background: var(--coral-soft); color: #8c4731; }
+  .connector { text-align: center; color: #6c9284; font: 700 12px var(--mono); line-height: 1.2; }
+  .diagram-note { margin: 14px 0 0; padding: 10px 13px; border-left: 3px solid var(--gold); background: #fff8e7; color: #614d23; font-size: 12px; }
+  .truth-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 15px; }
+  .truth { padding: 19px 21px; border: 1px solid var(--line); background: var(--paper); }
+  .truth h3 { margin: 0 0 7px; font-size: 16px; }
+  .truth p { margin: 0; color: var(--muted); font-size: 13px; }
+  .truth.actual { border-top: 4px solid var(--green); }
+  .truth.direction { border-top: 4px solid var(--gold); }
+  .tree {
+    padding: 22px 25px;
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    background: #172d2a;
+    color: #e1efe8;
+    font: 12px/1.9 var(--mono);
+    white-space: pre;
+  }
+  .tree .dim { color: #9db9ac; }
+  .layer-notes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+  .layer-note { padding: 15px 16px; border-top: 3px solid var(--green); background: var(--paper); }
+  .layer-note h3 { margin: 0 0 5px; font-size: 14px; }
+  .layer-note p { margin: 0; color: var(--muted); font-size: 12px; }
+  .rules { border: 1px solid var(--line); background: var(--paper); }
+  .rule { display: grid; grid-template-columns: 45px 185px 1fr; gap: 12px; padding: 15px 18px; border-bottom: 1px solid var(--line); align-items: start; }
+  .rule:last-child { border-bottom: 0; }
+  .rule .index { color: var(--green); font: 700 12px var(--mono); padding-top: 2px; }
+  .rule b { font-size: 14px; }
+  .rule p { margin: 0; color: var(--muted); font-size: 13px; }
+  code, .code { font-family: var(--mono); font-size: .91em; color: #174f43; background: #eaf3ed; padding: 1px 5px; overflow-wrap: anywhere; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); background: var(--paper); }
+  table { width: 100%; border-collapse: collapse; min-width: 650px; font-size: 13px; }
+  th { text-align: left; background: #e7efe9; color: #29483d; font-size: 12px; }
+  th, td { padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  .communication { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .comm-card { min-width: 0; padding: 21px 23px; border: 1px solid var(--line); background: var(--paper); }
+  .comm-card .tag { color: var(--green); font-size: 11px; font-weight: 800; }
+  .comm-card h3 { margin: 5px 0; font-size: 18px; }
+  .comm-card p { margin: 0; color: var(--muted); font-size: 13px; }
+  .comm-card pre { max-width: 100%; margin: 13px 0 0; padding: 12px; overflow-x: auto; overflow-wrap: anywhere; white-space: pre-wrap; background: #eff4ef; color: #29483d; font: 11px/1.7 var(--mono); }
+  .workflow { counter-reset: step; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .step { counter-increment: step; padding: 18px; background: var(--paper); }
+  .step::before { content: "0" counter(step); display: block; margin-bottom: 9px; color: var(--green); font: 700 12px var(--mono); }
+  .step h3 { margin: 0 0 5px; font-size: 14px; }
+  .step p { margin: 0; color: var(--muted); font-size: 12px; }
+  .dev-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-top: 14px; border: 1px solid var(--line); background: var(--line); }
+  .dev-mode article { min-width: 0; padding: 18px 20px; background: var(--paper); }
+  .dev-mode h3 { margin: 0 0 5px; font-size: 15px; }
+  .dev-mode p { margin: 0; color: var(--muted); font-size: 12px; }
+  .dev-mode pre { max-width: 100%; padding: 12px; margin: 11px 0 0; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: #172d2a; color: #e1efe8; font: 11px/1.7 var(--mono); }
+  .dev-note { margin-top: 10px; padding: 12px 15px; border-left: 3px solid var(--gold); background: var(--gold-soft); color: #594a28; font-size: 12px; }
+  .checklist { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; border: 1px solid var(--line); background: var(--line); }
+  .check { padding: 12px 15px; background: var(--paper); font-size: 13px; }
+  .check::before { content: "✓"; color: var(--green); font-weight: 800; margin-right: 9px; }
+  .evolution { display: grid; grid-template-columns: 1fr 48px 1fr 48px 1fr; align-items: stretch; }
+  .evo { padding: 19px; border: 1px solid var(--line); background: var(--paper); }
+  .evo.current { background: var(--green); border-color: var(--green); color: white; }
+  .evo h3 { margin: 0 0 7px; font-size: 16px; }
+  .evo p { margin: 0; color: var(--muted); font-size: 12px; }
+  .evo.current p { color: #e0eee7; }
+  .evo-arrow { display: grid; place-items: center; color: var(--green); font-weight: 800; }
+  .closing { margin-top: 24px; padding: 23px 26px; background: var(--gold-soft); border-left: 4px solid var(--gold); color: #594a28; }
+  .closing strong { color: #2d3d32; }
+  footer { display: flex; justify-content: space-between; gap: 20px; padding-top: 18px; margin-top: 42px; border-top: 1px solid #bdcec4; color: #6a8177; font-size: 11px; }
+  @media (max-width: 800px) {
+    .page { padding: 14px 14px 44px; }
+    .masthead { padding: 34px 25px; }
+    .masthead::after { right: -235px; }
+    .lead-grid, .truth-grid, .communication { grid-template-columns: 1fr; }
+    .dev-mode { grid-template-columns: 1fr; }
+    .principles { grid-template-columns: repeat(2, 1fr); }
+    .principle:nth-child(3n) { border-right: 1px solid var(--line); }
+    .principle:nth-child(2n) { border-right: 0; }
+    .arch-band { grid-template-columns: 105px 1fr; }
+    .arch-items { grid-template-columns: repeat(2, 1fr); }
+    .layer-notes { grid-template-columns: 1fr 1fr; }
+    .workflow { grid-template-columns: 1fr 1fr; }
+    .evolution { grid-template-columns: 1fr; gap: 8px; }
+    .evo-arrow { transform: rotate(90deg); min-height: 20px; }
+  }
+  @media (max-width: 520px) {
+    .page { padding: 8px 8px 32px; }
+    .masthead { padding: 28px 20px; }
+    .masthead p { font-size: 15px; }
+    .contents { gap: 3px; padding: 10px; }
+    .contents a { font-size: 11px; }
+    .section-head { grid-template-columns: 38px 1fr; gap: 8px; }
+    h2 { font-size: 24px; }
+    .lead { min-height: 0; padding: 21px; }
+    .lead h3 { font-size: 22px; }
+    .decision-list, .principles, .layer-notes, .workflow, .checklist { grid-template-columns: 1fr; }
+    .principle, .principle:nth-child(3n) { border-right: 0; }
+    .arch-band { grid-template-columns: 1fr; }
+    .arch-label { padding: 9px 12px; }
+    .diagram-wrap { padding: 12px; }
+    .rule { grid-template-columns: 30px 1fr; gap: 6px 10px; }
+    .rule p { grid-column: 2; }
+    footer { flex-direction: column; gap: 4px; }
+  }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="masthead" id="top">
+    <div class="eyebrow">Lancha AI Studio · Engineering Architecture</div>
+    <h1>架构设计思想<br>与模块化开发规范</h1>
+    <p>一份同时面向管理决策与工程协作的说明：解释系统为什么这样组织、代码应该放在哪里、模块如何安全地一起演进。</p>
+    <div class="mast-meta"><span>架构形态：模块化单体</span><span>工程形态：Monorepo</span><span>核心约束：模块边界可验证</span></div>
+  </header>
+
+  <nav class="contents" aria-label="文档目录">
+    <a href="#summary">核心结论</a><a href="#principles">设计思想</a><a href="#architecture">架构分层</a>
+    <a href="#structure">工程结构</a><a href="#rules">模块规范</a><a href="#workflow">开发流程</a><a href="#evolution">演进策略</a>
+  </nav>
+
+  <section id="summary">
+    <div class="section-head"><div class="section-no">01 / BRIEF</div><div><h2>先说结论</h2><p class="section-intro">当前阶段以清晰边界和可验证约束，换取交付效率与未来调整空间。</p></div></div>
+    <div class="lead-grid">
+      <div class="lead"><div class="label">架构主张</div><h3>先把单体做成有边界的系统，再让真实需求决定是否拆分。</h3><p>一个前后端 Monorepo、一套统一平台能力、多个彼此隔离的业务模块。部署与协作保持简单，模块通过契约隔离，避免共享数据库和代码把系统重新拧成一团。</p></div>
+      <div class="decision-list">
+        <div class="decision"><b>为什么不先上微服务</b><span>当前规模与团队协作尚不需要承担分布式部署、链路治理和数据一致性的额外成本。</span></div>
+        <div class="decision"><b>为什么强调模块边界</b><span>边界明确，才能独立理解、测试、替换；未来拆分时才有可用的切分面。</span></div>
+        <div class="decision"><b>为什么公共能力归平台</b><span>认证、权限、装载和基础设施只实现一次，避免每个业务模块重复造轮子。</span></div>
+        <div class="decision"><b>为什么规则要自动检查</b><span>约定由架构测试和 lint 规则执行，降低代码评审对个人记忆的依赖。</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="principles">
+    <div class="section-head"><div class="section-no">02 / WHY</div><div><h2>设计思想：简单，但不松散</h2><p class="section-intro">架构不是技术名词的集合，而是团队对变化成本、故障范围和协作方式作出的共同选择。</p></div></div>
+    <div class="principles">
+      <article class="principle"><div class="num">01 · DELIVERY</div><h3>以当前问题为中心</h3><p>先解决真实瓶颈，不为尚未出现的规模预建复杂系统。简单方案也要保留清楚的升级路径。</p></article>
+      <article class="principle"><div class="num">02 · BOUNDARY</div><h3>高内聚，低耦合</h3><p>一个业务能力的接口、数据和实现尽量收在同一模块内；跨模块只交换稳定契约，不共享内部细节。</p></article>
+      <article class="principle"><div class="num">03 · OWNERSHIP</div><h3>数据归属明确</h3><p>模块拥有自己的表与迁移分支。跨模块关系通过标识和契约表达，不依赖跨 schema JOIN 或外键。</p></article>
+      <article class="principle"><div class="num">04 · REUSE</div><h3>平台只承载共性</h3><p>平台提供身份、授权、模块装载、数据库接入等横向能力，不吸收某个业务的专有流程和数据模型。</p></article>
+      <article class="principle"><div class="num">05 · PROOF</div><h3>架构约束可验证</h3><p>后端 import 边界由 AST 测试检查，前端边界由 ESLint 检查，模型与迁移一致性纳入 CI。</p></article>
+      <article class="principle"><div class="num">06 · EVOLVE</div><h3>按信号逐步演进</h3><p>先记录拆分触发条件。性能、故障域或独立交付真的成为问题时，再调整进程和部署边界。</p></article>
+    </div>
+  </section>
+
+  <section id="architecture">
+    <div class="section-head"><div class="section-no">03 / MODEL</div><div><h2>系统架构：从用户界面到数据与外部服务</h2><p class="section-intro">业务模块是系统变化的主要承载单元；平台能力支撑模块运行，但不反向依赖业务。</p></div></div>
+    <div class="diagram-wrap">
+      <div class="architecture" role="img" aria-label="前端工作台经网关访问业务模块，业务模块使用平台能力、独立数据 schema 和外部服务">
+        <div class="arch-band"><div class="arch-label band-ui">使用层<small>Vue 3 工作台</small></div><div class="arch-items"><div class="arch-item"><b>业务页面与路由</b><span>按模块组织</span></div><div class="arch-item"><b>共享 UI / 请求</b><span>主题、权限、会话</span></div><div class="arch-item"><b>模块菜单</b><span>由后端权限信息驱动</span></div><div class="arch-item"><b>用户操作</b><span>按授权展示与调用</span></div></div></div>
+        <div class="connector">↓ HTTPS · API 请求 / 统一错误处理 ↓</div>
+        <div class="arch-band"><div class="arch-label band-gateway">接入层<small>FastAPI Gateway</small></div><div class="arch-items"><div class="arch-item"><b>Nginx</b><span>TLS、静态资源、反向代理</span></div><div class="arch-item"><b>模块装载</b><span>校验命名与路由约定</span></div><div class="arch-item"><b>认证与授权</b><span>请求身份、接口权限</span></div><div class="arch-item"><b>统一 API</b><span>REST 路由与异常响应</span></div></div></div>
+        <div class="connector">↓ 按模块路由 · 契约调用 · 事件通知 ↓</div>
+        <div class="arch-band"><div class="arch-label band-module">业务层<small>独立模块</small></div><div class="arch-items"><div class="arch-item"><b>业务 API / Service</b><span>用例与业务规则</span></div><div class="arch-item"><b>模型 / Repository</b><span>仅操作本模块数据</span></div><div class="arch-item"><b>契约 / 事件</b><span>受控跨模块通信</span></div><div class="arch-item"><b>前端模块</b><span>页面、组件、API、路由</span></div></div></div>
+        <div class="connector">↙ 使用公共能力　　独立 schema　　调用外部依赖 ↘</div>
+        <div class="arch-band"><div class="arch-label band-platform">平台层<small>跨模块共性</small></div><div class="arch-items"><div class="arch-item"><b>身份与 RBAC</b><span>用户、角色、权限点</span></div><div class="arch-item"><b>Gateway / Registry</b><span>装载、注册、路由</span></div><div class="arch-item"><b>数据库 / 配置</b><span>连接、schema 约定</span></div><div class="arch-item"><b>事件基础设施</b><span>进程内通知契约</span></div></div></div>
+        <div class="arch-band"><div class="arch-label band-data">数据与依赖<small>按所有权隔离</small></div><div class="arch-items"><div class="arch-item"><b>PostgreSQL</b><span>platform 与 mod_* schema</span></div><div class="arch-item"><b>对象存储</b><span>媒体与大文件</span></div><div class="arch-item"><b>外部 API / 系统</b><span>由业务适配层封装</span></div><div class="arch-item"><b>后台执行</b><span>由具体业务方案定义</span></div></div></div>
+      </div>
+      <p class="diagram-note"><b>职责分界：</b>平台负责“怎样装载和治理模块”；业务模块负责“业务如何工作”。平台不 import 业务实现，业务不越界读取其他模块的内部表。</p>
+    </div>
+    <div class="truth-grid">
+      <article class="truth actual"><h3>平台框架已具备的基础</h3><p>模块化单体与 Monorepo、平台 / 业务目录分层、FastAPI 网关和模块注册、RBAC、schema 与迁移约定、后端架构边界测试及前端边界 lint。</p></article>
+      <article class="truth direction"><h3>业务异步执行的设计方向</h3><p>长耗时工作由业务模块持有状态机、重试与执行策略。V5 设计提出模块声明后台循环，由 worker 启动；该执行方案应以对应业务实现与评审结论为准，不等同于 Celery 已是框架能力。</p></article>
+    </div>
+  </section>
+
+  <section id="structure">
+    <div class="section-head"><div class="section-no">04 / REPO</div><div><h2>工程结构：按职责分层，按业务组织</h2><p class="section-intro">后端与前端各自保留平台 / 业务边界；同一业务的实现尽量聚合在自己的模块目录。</p></div></div>
+    <div class="tree"><span class="dim">lancha-ai-studio/</span>
+├─ server/
+│  ├─ platforms/                 平台公共能力，不依赖业务 modules
+│  │  ├─ auth/                   身份、会话、RBAC 与权限校验
+│  │  ├─ gateway/                应用创建、模块装载、路由与中间件
+│  │  ├─ contract.py             平台与业务模块之间的模块契约
+│  │  ├─ db.py                   数据库接入与 schema 约定
+│  │  ├─ events.py               进程内事件发布与订阅
+│  │  └─ registry.py             已加载模块注册表
+│  ├─ modules/
+│  │  ├─ example/                可复制的业务模块样板
+│  │  │  ├─ api.py               HTTP 接口
+│  │  │  ├─ service.py           用例与业务逻辑
+│  │  │  ├─ models.py            本模块 ORM 模型
+│  │  │  ├─ contract.py          对外 DTO 与稳定能力
+│  │  │  ├─ module.py            名称、路由、菜单与权限声明
+│  │  │  └─ migrations/          本模块迁移版本
+│  ├─ tests/platforms/           平台与架构约束测试
+│  ├─ tests/modules/&lt;name&gt;/      业务模块测试
+│  ├─ migrations/                Alembic 共用环境入口
+│  └─ scripts/                   权限同步等运维脚本
+├─ web/src/
+│  ├─ shell/                     应用壳、布局、路由与模块装载
+│  ├─ shared/core/               请求、会话、权限、模块契约
+│  ├─ shared/ui/                 主题与可复用 UI 能力
+│  └─ modules/&lt;name&gt;/            页面、业务组件、API 与模块路由
+├─ deploy/                       Docker、Compose、Nginx 配置
+└─ docs/                         架构规范、设计决策与使用说明</div>
+    <div class="layer-notes">
+      <article class="layer-note"><h3>platforms 是基础设施层</h3><p>只放多个业务模块共同需要的机制。业务专有的表、流程和规则不进入平台。</p></article>
+      <article class="layer-note"><h3>modules 是业务所有权边界</h3><p>模块拥有自己的 API、服务、模型、迁移、权限声明和测试；模块可以单独启停。</p></article>
+      <article class="layer-note"><h3>shell 与 shared 不等于业务层</h3><p>shell 管应用组合；shared 放稳定、通用的前端能力，不成为跨模块共享业务逻辑的后门。</p></article>
+    </div>
+  </section>
+
+  <section id="rules">
+    <div class="section-head"><div class="section-no">05 / RULES</div><div><h2>模块化开发规范：把边界落到日常代码</h2><p class="section-intro">以下约定用于新增功能、代码评审和自动化检查，是模块可组合运行的基础条件。</p></div></div>
+    <div class="rules">
+      <div class="rule"><div class="index">R1</div><b>依赖方向只能向下</b><p><code>modules → platforms</code>。平台层永远不导入业务模块；业务模块不得反向依赖平台实现细节之外的上层组合代码。</p></div>
+      <div class="rule"><div class="index">R2</div><b>模块之间只依赖契约</b><p>需要即时结果时调用对方 <code>contract.py</code> 暴露的函数，返回冻结 DTO；禁止 import 对方的 <code>service</code>、<code>models</code> 或 Repository。</p></div>
+      <div class="rule"><div class="index">R3</div><b>数据按 schema 隔离</b><p>每个模块只读写自己的 schema；禁止跨模块 JOIN 与外键。跨模块业务读取走契约，弱一致性通知走事件。允许模块表引用 <code>platform.app_user.id</code>。</p></div>
+      <div class="rule"><div class="index">R4</div><b>命名保持端到端一致</b><p>模块名统一推导后端包、前端目录、API 前缀、路由、schema、权限码、配置前缀和迁移分支，不引入别名。</p></div>
+      <div class="rule"><div class="index">R5</div><b>权限声明以后端为准</b><p>权限点与菜单在模块声明一次，前端从平台接口取得当前用户可见信息；接口用依赖校验，按钮按权限码控制。</p></div>
+      <div class="rule"><div class="index">R6</div><b>跨模块事件只表达事实</b><p>发布方描述已发生的业务事实，不关心消费者。事件 payload 使用稳定数据结构，不传 ORM 实例，不借事件隐式调用同步业务。</p></div>
+      <div class="rule"><div class="index">R7</div><b>迁移跟随数据所有者</b><p>平台表与各模块表使用独立 Alembic 分支。模型变更必须提交迁移，并运行对应分支升级与 <code>alembic check</code>。</p></div>
+      <div class="rule"><div class="index">R8</div><b>跨域 SQL 不绕过边界</b><p>架构测试可检查 Python import 与 ORM 外键，但无法证明任意原生 SQL 安全。模块禁止编写跨模块 schema SQL；高保障隔离需再配数据库角色权限。</p></div>
+    </div>
+
+    <h3 style="margin:25px 0 10px;font-size:17px">模块命名映射</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>对象</th><th>约定</th><th>示例（模块名 example）</th></tr></thead>
+      <tbody>
+        <tr><td>模块名</td><td>小写字母、数字、下划线，字母开头</td><td><code>example</code></td></tr>
+        <tr><td>后端包 / 前端目录</td><td>一处定义，全链路一致</td><td><code>modules.example</code> / <code>src/modules/example</code></td></tr>
+        <tr><td>API / 前端路由</td><td>统一模块前缀</td><td><code>/api/example/items</code> / <code>/example/items</code></td></tr>
+        <tr><td>数据库 schema</td><td><code>mod_&lt;模块名&gt;</code></td><td><code>mod_example</code></td></tr>
+        <tr><td>权限码 / 事件名</td><td><code>模块:资源:动作</code> / <code>模块.事件</code></td><td><code>example:item:view</code> / <code>example.item_created</code></td></tr>
+        <tr><td>配置 / 迁移分支</td><td><code>&lt;模块大写&gt;_</code> / <code>alembic -n &lt;模块名&gt;</code></td><td><code>EXAMPLE_</code> / <code>alembic -n example</code></td></tr>
+      </tbody>
+    </table></div>
+
+    <h3 style="margin:25px 0 10px;font-size:17px">跨模块沟通的选择</h3>
+    <div class="communication">
+      <article class="comm-card"><div class="tag">同步，需要结果</div><h3>调用对方公开契约</h3><p>适用于当前用例必须立即拿到对方结果的场景。契约定义输入、输出和失败语义；调用方不关心服务内部如何实现。</p><pre>result = await catalog.contract.get_product(product_id)
+# result 是稳定 DTO，不是 ORM Model</pre></article>
+      <article class="comm-card"><div class="tag">异步，只需通知</div><h3>发布领域事件</h3><p>适用于“某事实已经发生，其他模块可自行响应”的场景。发布方不持有消费者列表，也不等待消费者执行。</p><pre>events.publish(
+    "catalog.product_imported",
+    {"product_id": product_id},
+)</pre></article>
+    </div>
+  </section>
+
+  <section id="workflow">
+    <div class="section-head"><div class="section-no">06 / BUILD</div><div><h2>新增模块与交付检查</h2><p class="section-intro">沿用样板目录和统一验证命令，让新模块从第一天就符合装载、权限、数据和前端边界约定。</p></div></div>
+    <div class="workflow">
+      <article class="step"><h3>复制样板</h3><p>从 <code>server/modules/example</code> 和 <code>web/src/modules/example</code> 建立同名模块目录。</p></article>
+      <article class="step"><h3>声明模块身份</h3><p>更新 module 名称、路由、菜单、权限码、schema、配置前缀与迁移分支。</p></article>
+      <article class="step"><h3>实现模块闭环</h3><p>将 API、用例逻辑、模型、前端页面和测试放在本模块边界内；跨模块使用契约或事件。</p></article>
+      <article class="step"><h3>验证后集成</h3><p>跑后端测试、前端 lint/typecheck、迁移一致性检查，再验证模块启停与权限表现。</p></article>
+    </div>
+    <h3 style="margin:22px 0 10px;font-size:17px">只开发一个模块：按需装载与安装依赖</h3>
+    <div class="dev-mode">
+      <article><h3>后端：只启用自己的模块</h3><p>把模块名写入 <code>server/.env</code>，平台依赖与模块依赖分开安装。</p><pre># server/.env
+ENABLED_MODULES=example
+
+cd server
+pip install -r requirements/dev.txt
+pip install -r modules/example/requirements.txt</pre><p style="margin-top:8px">平台与开发工具从 <code>requirements/dev.txt</code> 安装；只额外安装自己模块的 <code>requirements.txt</code>，其他模块不会被网关装载。</p></article>
+      <article><h3>前端：只装配自己的模块</h3><p>把模块名写入 <code>web/.env.local</code>，开发服务器仅动态导入启用模块入口。</p><pre># web/.env.local
+VITE_ENABLED_MODULES=example
+
+cd web
+npm install
+npm run dev</pre><p style="margin-top:8px">模块入口按需加载并独立拆分；日常开发只执行自己的模块代码，不把所有模块静态并入应用入口。</p></article>
+    </div>
+    <div class="dev-note"><b>依赖边界：</b>后端支持模块级 Python 依赖文件。当前前端仍使用 Monorepo 根级 <code>web/package.json</code> 管理共享 npm 依赖，<code>VITE_ENABLED_MODULES</code> 控制模块装配与动态加载，不代表每个模块拥有独立 npm 安装环境；生产构建会为模块入口生成独立 chunk。</div>
+    <h3 style="margin:22px 0 10px;font-size:17px">合并前检查清单</h3>
+    <div class="checklist">
+      <div class="check">模块命名、API 前缀、路由、schema、权限码保持一致</div>
+      <div class="check">没有跨业务模块导入内部 service、models 或 repository</div>
+      <div class="check">没有跨模块 JOIN、外键或原生 SQL schema 访问</div>
+      <div class="check">权限由后端声明并在接口层校验，前端只消费授权结果</div>
+      <div class="check">数据库变更包含本模块迁移，迁移检查通过</div>
+      <div class="check">边界测试、模块测试、前端 lint 与 typecheck 通过</div>
+    </div>
+    <div class="closing"><strong>建议的标准验证命令：</strong>后端运行 <code>cd server &amp;&amp; pytest</code>；前端运行 <code>cd web &amp;&amp; npm run lint &amp;&amp; npm run typecheck</code>；涉及模型变更时运行对应迁移分支的 <code>alembic check</code>。</div>
+  </section>
+
+  <section id="evolution">
+    <div class="section-head"><div class="section-no">07 / NEXT</div><div><h2>演进策略：边界先行，部署随后</h2><p class="section-intro">模块化不是微服务的过渡期标签，而是当前架构的组织方式。是否拆进程，取决于明确的工程信号。</p></div></div>
+    <div class="evolution">
+      <article class="evo"><h3>现在：模块化单体</h3><p>统一代码库和运行载体；模块独立命名、数据归属、测试与权限；平台复用横向能力。</p></article>
+      <div class="evo-arrow">→</div>
+      <article class="evo current"><h3>出现信号：定位瓶颈</h3><p>独立扩缩容成为必要；故障需要隔离；资源争抢影响关键流程；模块需要独立发布或独立值守。</p></article>
+      <div class="evo-arrow">→</div>
+      <article class="evo"><h3>按边界拆分：逐步服务化</h3><p>优先把已有模块边界变成进程边界；明确 API、数据所有权、可靠消息和运维责任，再引入分布式治理。</p></article>
+    </div>
+    <div class="closing"><strong>刻意暂缓：</strong>在没有真实需求前，不引入多租户、运行时微前端、分布式任务平台或模块脚手架等额外复杂度。异步执行、数据域和调度等能力按业务需要逐项补齐，不把规划能力描述成已落地能力。</div>
+  </section>
+
+  <footer><span>lancha-ai-studio · 架构设计思想与模块化开发规范</span><span>依据：docs/架构规范.md · docs/架构设计-V5.0.0.md</span></footer>
+</main>
+</body>
+</html>
