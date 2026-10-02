@@ -33,7 +33,7 @@
 | `server/platforms/auth/models.py`（改） | 追加 `UserIdentity` / `UserSession` / `OAuthState` 三个模型 |
 | `server/platforms/migrations/versions/0002_auth_session.py` | 三张表的迁移 |
 | `server/platforms/auth/session.py` | 会话签发、解析、销毁，与登录方式无关 |
-| `server/platforms/auth/identity.py` | 外部身份映射到 `app_user`，与登录方式无关 |
+| `server/platforms/auth/identity.py` | 外部身份映射到 `user`，与登录方式无关 |
 | `server/platforms/auth/oauth_state.py` | OAuth state 的创建与原子消费 |
 | `server/platforms/auth/feishu/client.py` | 授权 URL、code 换 token、拉 user_info |
 | `server/platforms/auth/permissions.py` | 平台自身的权限码与菜单声明 |
@@ -137,7 +137,7 @@ Expected: FAIL，`ImportError: cannot import name 'UserIdentity' from 'platforms
 
 ```python
 class UserIdentity(TimestampMixin, Base):
-    """外部身份到 app_user 的映射。带 provider 是为了以后接别的账号系统时不用改表结构。"""
+    """外部身份到 user 的映射。带 provider 是为了以后接别的账号系统时不用改表结构。"""
 
     __tablename__ = "user_identity"
     __table_args__ = (
@@ -147,7 +147,7 @@ class UserIdentity(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey(f"{PLATFORM_SCHEMA}.app_user.id", ondelete="CASCADE"), index=True
+        ForeignKey(f"{PLATFORM_SCHEMA}.user.id", ondelete="CASCADE"), index=True
     )
     provider: Mapped[str] = mapped_column(String(32))
     external_id: Mapped[str] = mapped_column(String(128))
@@ -165,7 +165,7 @@ class UserSession(Base):
 
     token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey(f"{PLATFORM_SCHEMA}.app_user.id", ondelete="CASCADE"), index=True
+        ForeignKey(f"{PLATFORM_SCHEMA}.user.id", ondelete="CASCADE"), index=True
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -224,7 +224,7 @@ def upgrade() -> None:
         sa.Column("last_login_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.ForeignKeyConstraint(["user_id"], [f"{SCHEMA}.app_user.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], [f"{SCHEMA}.user.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("provider", "external_id", name="uq_user_identity_provider_external"),
         schema=SCHEMA,
@@ -237,7 +237,7 @@ def upgrade() -> None:
         sa.Column("user_id", sa.BigInteger(), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.ForeignKeyConstraint(["user_id"], [f"{SCHEMA}.app_user.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], [f"{SCHEMA}.user.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("token_hash"),
         schema=SCHEMA,
     )
@@ -561,7 +561,7 @@ Expected: FAIL，`ModuleNotFoundError: No module named 'platforms.auth.identity'
 创建 `server/platforms/auth/identity.py`：
 
 ```python
-"""外部身份到 app_user 的映射。
+"""外部身份到 user 的映射。
 
 与登录方式无关：飞书、公司账号系统都把自己的用户资料归一成 ExternalProfile 后交给这里。
 认人顺序是「身份 → 邮箱 → 新建」，中间那步是为了同一个人用不同登录方式进来时能合并到一个账号。
@@ -591,7 +591,7 @@ def _normalise_email(email: str) -> str:
 
 
 async def upsert(session: AsyncSession, profile: ExternalProfile) -> AppUser:
-    """按外部身份找到或创建 app_user，并刷新身份记录。新用户不授予任何角色。"""
+    """按外部身份找到或创建 user，并刷新身份记录。新用户不授予任何角色。"""
     email = _normalise_email(profile.email)
 
     identity = (
@@ -639,7 +639,7 @@ Expected: 6 passed
 
 ```bash
 git add server/platforms/auth/identity.py server/tests/platforms/test_auth_identity.py
-git commit -m "feat: 外部身份到 app_user 的映射"
+git commit -m "feat: 外部身份到 user 的映射"
 ```
 
 ---
@@ -3448,7 +3448,7 @@ VITE_DEV_USER_ID=1
 默认 `AUTH_MODE=dev_header`，身份由 `X-User-Id` 请求头模拟，需要先建一个用户：
 
 ```sql
-INSERT INTO platform.app_user (id, username, display_name, is_superuser, is_active)
+INSERT INTO platform."user" (id, username, display_name, is_superuser, is_active)
 VALUES (1, 'admin', 'admin', true, true);
 ```
 
@@ -3459,7 +3459,7 @@ VALUES (1, 'admin', 'admin', true, true);
 第一个超级管理员仍然手工指定——飞书扫码登录一次，再执行：
 
 ```sql
-UPDATE platform.app_user SET is_superuser = true WHERE username = '你的企业邮箱';
+UPDATE platform."user" SET is_superuser = true WHERE username = '你的企业邮箱';
 ```
 
 之后就能在「系统管理 → 角色管理」里建角色，在「用户管理」里把角色分配给其他人。

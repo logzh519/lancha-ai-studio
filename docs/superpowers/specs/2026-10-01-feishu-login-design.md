@@ -20,7 +20,7 @@
 做：
 
 - 飞书 OAuth 授权码登录，服务端会话
-- 外部身份到 `platform.app_user` 的映射
+- 外部身份到 `platform.user` 的映射
 - 登录页（深色 + Canvas 粒子动画，移植自 `advertising-center`）
 - 用户管理页：启用/停用、分配角色
 - 角色管理页：建角色、编辑权限码、删除
@@ -45,7 +45,7 @@
 | 文件 | 职责 | 换登录方式时 |
 |---|---|---|
 | `session.py` | 会话签发、校验、销毁 | 不动 |
-| `identity.py` | 外部身份映射到 `app_user`、首次登录开通 | 不动 |
+| `identity.py` | 外部身份映射到 `user`、首次登录开通 | 不动 |
 | `feishu/client.py` | 授权 URL、code 换 token、拉 user_info | 整个替换 |
 
 身份表带 `provider` 字段，以后接公司自有账号系统直接插新行，表结构不动。
@@ -63,7 +63,7 @@
 
 ### 新用户自动创建但不授予任何角色
 
-首次登录自动建 `app_user`，不给角色，登录后菜单为空，等管理员在界面上授权。
+首次登录自动建 `user`，不给角色，登录后菜单为空，等管理员在界面上授权。
 
 **不做「首个登录者自动成为超管」**。超管一律按现有 README 的方式手工 SQL 指定。
 
@@ -72,18 +72,18 @@
 身份识别按以下顺序：
 
 1. 按 `(provider='feishu', external_id=open_id)` 查 `user_identity` —— 命中即老用户
-2. 未命中，按 `username = 企业邮箱` 查 `app_user` —— 命中则把飞书身份绑定到该账号
-3. 仍未命中，新建 `app_user`，`username` 取企业邮箱（飞书未返回邮箱时回退 `feishu_{open_id}`）
+2. 未命中，按 `username = 企业邮箱` 查 `user` —— 命中则把飞书身份绑定到该账号
+3. 仍未命中，新建 `user`，`username` 取企业邮箱（飞书未返回邮箱时回退 `feishu_{open_id}`）
 
-第 2 步是为以后接公司账号系统预留：同一个人用邮箱能自然合并到同一个 `app_user`，不会变成两个账号。
+第 2 步是为以后接公司账号系统预留：同一个人用邮箱能自然合并到同一个 `user`，不会变成两个账号。
 这是选邮箱而非 `open_id` 作 `username` 的主要理由——`open_id` 更稳定但完全不可读，且换飞书应用
 照样会变（那种情况靠 `union_id` 兜）。
 
 邮箱后续变更时只更新 `user_identity.email`，不改 `username`，避免唯一约束冲突和审计断裂。
 
-### `app_user` 不加字段
+### `user` 不加字段
 
-头像和邮箱放 `user_identity`，`app_user` 继续保持「只存身份标识」的定位。
+头像和邮箱放 `user_identity`，`user` 继续保持「只存身份标识」的定位。
 
 ### `auth_mode` 显式配置
 
@@ -100,7 +100,7 @@
 ```sql
 platform.user_identity (
   id           BIGSERIAL PRIMARY KEY,
-  user_id      BIGINT NOT NULL REFERENCES platform.app_user(id) ON DELETE CASCADE,
+   user_id      BIGINT NOT NULL REFERENCES platform."user"(id) ON DELETE CASCADE,
   provider     VARCHAR(32)  NOT NULL,       -- 'feishu'
   external_id  VARCHAR(128) NOT NULL,       -- 飞书 open_id
   union_id     VARCHAR(128) NOT NULL DEFAULT '',
@@ -115,7 +115,7 @@ CREATE INDEX ix_platform_user_identity_user_id ON platform.user_identity (user_i
 
 platform.user_session (
   token_hash   VARCHAR(64) PRIMARY KEY,     -- sha256 hex，原值只存在 cookie
-  user_id      BIGINT NOT NULL REFERENCES platform.app_user(id) ON DELETE CASCADE,
+   user_id      BIGINT NOT NULL REFERENCES platform."user"(id) ON DELETE CASCADE,
   expires_at   TIMESTAMPTZ NOT NULL,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -161,7 +161,7 @@ CREATE INDEX ix_platform_oauth_state_expires_at ON platform.oauth_state (expires
 任何一步失败都 302 到 `/login?error=<中文原因>`，不返回 JSON——因为这个地址是浏览器直接访问的。
 
 每请求鉴权由 `session_principal_provider` 完成：读 cookie → sha256 → 一条 SQL join `user_session`
-和 `app_user`（同时校验会话未过期、用户 `is_active`）→ 返回 `Principal`，查不到返回 `ANONYMOUS`。
+和 `user`（同时校验会话未过期、用户 `is_active`）→ 返回 `Principal`，查不到返回 `ANONYMOUS`。
 该 provider 顺带把 `is_superuser` 填进 `Principal`，使 `service.is_superuser()` 短路，省一次查询。
 
 ## 回调地址

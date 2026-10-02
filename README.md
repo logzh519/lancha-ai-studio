@@ -28,7 +28,7 @@ npm run dev                          # http://localhost:5173
 默认 `AUTH_MODE=dev_header`，身份由 `X-User-Id` 请求头模拟（仅限本地开发），需要先在空表里建一个用户：
 
 ```sql
-INSERT INTO platform.app_user (username, display_name, is_superuser, is_active)
+INSERT INTO platform."user" (username, display_name, is_superuser, is_active)
 VALUES ('admin', 'admin', true, true);
 ```
 
@@ -42,7 +42,7 @@ VALUES ('admin', 'admin', true, true);
 第一个超级管理员仍然手工指定——先用飞书扫码登录一次，再执行：
 
 ```sql
-UPDATE platform.app_user SET is_superuser = true WHERE username = '你的企业邮箱（小写）';
+UPDATE platform."user" SET is_superuser = true WHERE username = '你的企业邮箱（小写）';
 ```
 
 `username` 取的是飞书返回的**企业邮箱**并统一转小写；该账号没有企业邮箱时，`username` 为 `feishu_<open_id>`。
@@ -50,7 +50,7 @@ UPDATE platform.app_user SET is_superuser = true WHERE username = '你的企业�
 
 ```sql
 SELECT u.id, u.username, u.display_name, i.email
-FROM platform.app_user u JOIN platform.user_identity i ON i.user_id = u.id;
+FROM platform."user" u JOIN platform.user_identity i ON i.user_id = u.id;
 ```
 
 之后就能在「角色管理」里建角色，在「用户管理」里把角色分配给其他人（超级管理员跳过权限校验，默认可见这两个菜单）。

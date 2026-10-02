@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>认证、账户与 RBAC 设计分析</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1c2b32;
+      --muted: #53656b;
+      --paper: #f3f6f4;
+      --surface: #fff;
+      --line: #d9e2de;
+      --green: #176b52;
+      --green-soft: #e4f2eb;
+      --blue: #245b79;
+      --blue-soft: #e8f1f6;
+      --amber: #815a12;
+      --amber-soft: #fbf1d9;
+      --red: #923e36;
+      --red-soft: #f9e9e6;
+      --code: #edf1ef;
+      --shadow: 0 18px 48px rgba(28, 43, 50, .08);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: "Microsoft YaHei UI", "Noto Sans CJK SC", "PingFang SC", sans-serif;
+      font-size: 15px;
+      line-height: 1.75;
+    }
+    a { color: var(--blue); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    a:hover { color: var(--green); }
+    code, pre { font-family: Consolas, "Cascadia Code", monospace; }
+    code {
+      padding: 2px 5px;
+      border-radius: 3px;
+      background: var(--code);
+      font-size: .92em;
+      overflow-wrap: anywhere;
+    }
+    .masthead {
+      padding: 44px max(24px, calc((100vw - 1120px) / 2)) 36px;
+      background: #183a38;
+      color: #f5faf7;
+      border-bottom: 6px solid #4e9876;
+    }
+    .masthead-inner { max-width: 1120px; margin: 0 auto; }
+    .eyebrow { color: #a9d6bd; font-size: 12px; font-weight: 700; letter-spacing: .08em; }
+    h1 { max-width: 800px; margin: 8px 0 10px; font-size: clamp(28px, 4vw, 42px); line-height: 1.22; }
+    .subtitle { max-width: 790px; margin: 0; color: #d2e3dc; font-size: 16px; }
+    .stamp { margin-top: 18px; color: #a9c6bb; font-size: 13px; }
+    .layout {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 32px;
+      max-width: 1168px;
+      margin: 32px auto 72px;
+      padding: 0 24px;
+      align-items: start;
+    }
+    nav {
+      position: sticky;
+      top: 20px;
+      padding: 18px 16px;
+      border-left: 2px solid #a9c6bb;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    nav strong { display: block; margin-bottom: 8px; color: var(--ink); }
+    nav a { display: block; padding: 4px 0; text-decoration: none; }
+    main { min-width: 0; }
+    section {
+      margin: 0 0 24px;
+      padding: 26px 30px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      scroll-margin-top: 18px;
+    }
+    h2 { margin: 0 0 16px; font-size: 23px; line-height: 1.35; }
+    h3 { margin: 22px 0 8px; font-size: 17px; }
+    p { margin: 10px 0; }
+    ul, ol { padding-left: 22px; }
+    li { margin: 5px 0; }
+    .summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+    .summary {
+      padding: 14px 15px;
+      border-top: 3px solid var(--green);
+      background: #f2f7f3;
+    }
+    .summary b { display: block; margin-bottom: 3px; }
+    .callout { margin: 14px 0; padding: 13px 16px; border-left: 4px solid var(--green); background: var(--green-soft); }
+    .callout.warn { border-color: #c08a22; background: var(--amber-soft); }
+    .callout.risk { border-color: #b5564d; background: var(--red-soft); }
+    .callout.info { border-color: #4480a1; background: var(--blue-soft); }
+    .table-wrap { overflow-x: auto; margin: 12px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 10px 11px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { background: #edf3f0; color: #28433d; font-weight: 700; }
+    td:first-child { white-space: nowrap; }
+    .relationship {
+      padding: 16px;
+      border: 1px solid var(--line);
+      background: #f8faf9;
+      overflow-x: auto;
+    }
+    .relationship pre { margin: 0; line-height: 1.65; font-size: 13px; }
+    .pill { display: inline-block; margin: 0 3px 4px 0; padding: 2px 8px; border-radius: 99px; background: var(--green-soft); color: #205d47; font-size: 12px; font-weight: 700; }
+    .steps { counter-reset: step; list-style: none; padding: 0; }
+    .steps li { position: relative; min-height: 35px; margin: 0; padding: 0 0 15px 42px; }
+    .steps li::before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 1px;
+      display: grid;
+      width: 27px;
+      height: 27px;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--green);
+      color: white;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 10px; align-items: center; margin: 16px 0; }
+    .flow div { min-height: 76px; display: grid; place-items: center; padding: 12px; border: 1px solid var(--line); background: #f8faf9; text-align: center; }
+    .flow span { color: var(--green); font-weight: 800; }
+    .verdict { display: inline-block; padding: 3px 9px; border-radius: 3px; font-size: 13px; font-weight: 800; }
+    .yes { background: var(--green-soft); color: #205d47; }
+    .partial { background: var(--amber-soft); color: #72500d; }
+    .no { background: var(--red-soft); color: #883c34; }
+    .codeblock { overflow-x: auto; padding: 15px 17px; background: #1d2c31; color: #e4f0ea; border-radius: 4px; }
+    .codeblock code { padding: 0; background: transparent; color: inherit; white-space: pre; }
+    footer { max-width: 1120px; margin: 0 auto 40px; padding: 0 24px; color: var(--muted); font-size: 13px; }
+    @media (max-width: 820px) {
+      .layout { display: block; margin-top: 20px; }
+      nav { position: static; display: flex; flex-wrap: wrap; gap: 4px 15px; margin-bottom: 18px; padding: 10px 0; border-left: 0; border-bottom: 1px solid var(--line); }
+      nav strong { width: 100%; }
+      section { padding: 21px 19px; }
+      .summary-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      .masthead { padding-top: 32px; }
+      .flow { grid-template-columns: 1fr; }
+      .flow span { transform: rotate(90deg); justify-self: center; }
+      th, td { padding: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="masthead">
+    <div class="masthead-inner">
+      <div class="eyebrow">PLATFORM AUTHORIZATION REVIEW</div>
+      <h1>认证、账户与 RBAC 设计分析</h1>
+      <p class="subtitle">从当前代码和迁移出发，说明外部登录如何落到内部账户，RBAC 如何授权，以及未来更换账号系统时哪些部分能复用、哪些仍需改造。</p>
+      <div class="stamp">分析日期：2026-10-02　|　范围：server/platforms/auth、平台迁移、网关、前端登录与权限状态</div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav aria-label="目录">
+      <strong>本文目录</strong>
+      <a href="#conclusion">结论先行</a>
+      <a href="#relationship">设计关系</a>
+      <a href="#tables">表结构</a>
+      <a href="#flows">请求如何鉴权</a>
+      <a href="#usage">日常使用</a>
+      <a href="#switch">更换登录系统</a>
+      <a href="#risks">当前边界与建议</a>
+      <a href="#references">代码依据</a>
+    </nav>
+
+    <main>
+      <section id="conclusion">
+        <h2>结论先行</h2>
+        <p>这套设计将“认证”和“授权”分开：认证负责确认外部用户是谁，再映射到内部 <code>user.id</code>；授权只围绕这个内部 ID 计算角色和权限。业务模块不依赖飞书账号，也不直接消费外部 token。</p>
+        <div class="summary-grid">
+          <div class="summary"><b>账户与 RBAC 解耦</b>只要新认证源能给出稳定身份并映射到既有 <code>user.id</code>，角色、权限、模块 API 无需改变。</div>
+          <div class="summary"><b>内部会话可复用</b>当前 cookie session、哈希存储、撤销与 Principal 形状基本是 provider-neutral 的。</div>
+          <div class="summary"><b>当前不是即插即用</b>Feishu 的路由、配置、启动校验和登录页都写死；“只替换 <code>platforms/auth/feishu/</code>”与现状不符。</div>
+        </div>
+        <div class="callout warn"><b>切换成本判断：</b>若新系统是相似的浏览器 OAuth/OIDC 登录，预计是小到中等范围的认证接入改造，RBAC 可保持不动；若是反向代理头、JWT 网关、LDAP 或完全不同的账号生命周期，需新增对应认证入口与身份映射策略，不能视为换一个客户端文件。</div>
+      </section>
+
+      <section id="relationship">
+        <h2>设计关系</h2>
+        <div class="flow" aria-label="身份认证和权限校验的关系">
+          <div><b>外部身份源</b><br>飞书 OAuth / 将来的企业账号</div><span>→</span>
+          <div><b>内部账户</b><br><code>platform.user.id</code></div><span>→</span>
+          <div><b>RBAC 授权</b><br>角色 → 权限码</div>
+        </div>
+        <p><code>Principal</code> 是认证与授权之间的契约，目前包含 <code>user_id</code> 和可选的 <code>is_superuser</code>。请求依赖通过 <code>current_principal</code> 取得 Principal；授权代码只认内部用户 ID，不要求知道这个 ID 来自飞书、开发请求头还是未来的身份源。</p>
+        <div class="relationship">
+          <pre>外部 provider + external_id
+             │
+             ▼  user_identity.user_id
+      user (内部账户)
+        ├── user_session       已认证会话 → Principal.user_id
+        └── user_role ────────┐
+                              ▼
+                            role
+                              │ role_permission
+                              ▼
+                         permission
+
+模块 module.py ──声明权限──▶ sync_permissions ──▶ permission</pre>
+        </div>
+        <p>平台权限（用户/角色管理）由平台声明；业务权限由各模块的 <code>module.py</code> 声明。<code>sync_permissions</code> 将声明同步到同一张权限表，删除已不再声明的权限点时会级联删除其角色绑定。</p>
+      </section>
+
+      <section id="tables">
+        <h2>表结构与职责</h2>
+        <p>下表对应当前 ORM 模型和 platform schema 的 Alembic 迁移。所有账户、认证状态与 RBAC 数据均在 PostgreSQL 的 <code>platform</code> schema。</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>表</th><th>关键字段 / 约束</th><th>职责与关系</th></tr></thead>
+            <tbody>
+              <tr><td><code>user</code></td><td><code>id</code> 主键；<code>username</code> 唯一；<code>display_name</code>；<code>is_superuser</code>；<code>is_active</code>；创建/更新时间</td><td>平台内部账户主表。没有密码或外部 access token；所有授权和会话最终关联它的 ID。</td></tr>
+              <tr><td><code>user_identity</code></td><td><code>user_id</code> 外键；<code>provider</code>；<code>external_id</code>；<code>union_id</code>、<code>email</code>、<code>avatar_url</code>、<code>last_login_at</code>；唯一约束 <code>(provider, external_id)</code></td><td>外部身份到内部账户的映射。一个内部用户可以有关联的多个 provider 身份；删除用户时身份级联删除。没有 email 唯一约束。</td></tr>
+              <tr><td><code>user_session</code></td><td><code>token_hash</code> 主键；<code>user_id</code> 外键；<code>expires_at</code>；<code>created_at</code></td><td>内部会话。数据库只存原始随机 token 的 SHA-256；cookie 持有原 token。用户停用时会删除其会话。</td></tr>
+              <tr><td><code>oauth_state</code></td><td><code>state_hash</code> 主键；<code>nonce_hash</code>；<code>expires_at</code>；<code>created_at</code></td><td>登录回调的一次性 state 与浏览器 nonce 绑定，防止重放和 login CSRF；消费时用原子 DELETE RETURNING。</td></tr>
+              <tr><td><code>role</code></td><td><code>id</code> 主键；<code>code</code> 唯一；<code>name</code>；<code>description</code>；创建/更新时间</td><td>可分配给用户的一组授权集合。</td></tr>
+              <tr><td><code>permission</code></td><td><code>id</code> 主键；<code>code</code> 唯一；<code>name</code>；<code>module</code> 索引</td><td>权限点注册表。代码声明是来源，数据库负责查询与角色关联。</td></tr>
+              <tr><td><code>user_role</code></td><td><code>user_id</code>、<code>role_id</code> 外键；唯一约束 <code>(user_id, role_id)</code></td><td>用户与角色的多对多关联；删除用户或角色时关联级联清理。</td></tr>
+              <tr><td><code>role_permission</code></td><td><code>role_id</code>、<code>permission_id</code> 外键；唯一约束 <code>(role_id, permission_id)</code></td><td>角色与权限点的多对多关联；删除角色或权限点时关联级联清理。</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout info"><b>权限继承规则：</b>一个用户拥有多个角色时，权限是这些角色权限的并集；代码没有 deny/显式拒绝优先级。超级用户由 <code>user.is_superuser</code> 表示，可跳过常规权限点校验。</div>
+      </section>
+
+      <section id="flows">
+        <h2>请求如何鉴权</h2>
+        <h3>生产登录：飞书</h3>
+        <ol class="steps">
+          <li>登录页调用 <code>GET /api/auth/config</code>，检查飞书是否已配置；点击登录后调用 <code>POST /api/auth/feishu/login-url</code>。</li>
+          <li>后端生成随机 state/nonce，只将哈希写入 <code>oauth_state</code>，nonce 原文写入 HttpOnly cookie；浏览器跳转到飞书授权页。</li>
+          <li>回调校验并消费 state/nonce，使用授权码换 token、获取用户资料，整理为 <code>ExternalProfile</code>。</li>
+          <li><code>identity.upsert()</code> 按外部身份查找；未命中时尝试按规范化邮箱匹配既有 <code>user.username</code>，否则创建内部账户；新账户不自动授予角色。</li>
+          <li><code>session.issue()</code> 创建本地会话，数据库存 token 哈希，浏览器收到 HttpOnly <code>lancha_session</code> cookie。</li>
+          <li>后续每个请求解析会话为 Principal；无有效会话或用户被停用时视为匿名。</li>
+        </ol>
+        <h3>接口授权</h3>
+        <p>业务路由声明例如 <code>Depends(require("example:item:view"))</code>。<code>require()</code> 校验用户仍有效，再查询角色关联权限；缺权限返回 403。匿名请求的权限集合为空。平台 <code>GET /api/modules</code> 同样按权限过滤菜单，并返回当前用户权限码。</p>
+        <p>前端可用 <code>v-permission="'example:item:create'"</code> 隐藏按钮或表单，但它只改善界面体验；请求是否允许必须由后端依赖再次校验。</p>
+        <h3>开发登录</h3>
+        <p><code>AUTH_MODE=dev_header</code> 时从 <code>X-User-Id</code> 读取内部用户 ID，不走飞书、cookie session 或登录回调。它仅用于本地开发和测试，不应部署到生产；前端的 <code>VITE_DEV_USER_ID</code> 会自动附加该请求头。</p>
+      </section>
+
+      <section id="usage">
+        <h2>怎么使用和维护</h2>
+        <h3>初始化</h3>
+        <ol>
+          <li>执行平台迁移：<code>alembic -n platform upgrade head</code>；业务模块分别执行自己的迁移。</li>
+          <li>执行 <code>python scripts/sync_permissions.py</code>，使模块与平台声明的权限点进入数据库。</li>
+          <li>本地开发可用 <code>dev_header</code> 测试；生产设置 <code>AUTH_MODE=feishu</code>，配置应用 ID、密钥、回调 URL，且必须设置 HTTPS 环境下的 cookie 安全选项。</li>
+        </ol>
+        <h3>首个超级管理员</h3>
+        <p>首次上线需先通过 SQL 创建一个内部管理员用户（或先完成一次外部登录，再把该用户提升为超级用户）。当前 README 提供的空表开发初始化示例：</p>
+        <pre class="codeblock"><code>INSERT INTO platform."user" (username, display_name, is_superuser, is_active)
+VALUES ('admin', 'admin', true, true);</code></pre>
+        <p>飞书模式首次登录后，也可按邮箱查到用户再提升：</p>
+        <pre class="codeblock"><code>UPDATE platform."user"
+SET is_superuser = true
+WHERE username = '你的企业邮箱（小写）';</code></pre>
+        <div class="callout warn">避免在共享环境长期使用开发态固定 ID；也不要在生产直接信任客户端传来的 <code>X-User-Id</code>。超级用户不受常规 RBAC 权限点约束，SQL 提权应纳入运维审计。</div>
+        <h3>授权操作</h3>
+        <ul>
+          <li>模块开发者在模块 <code>module.py</code> 声明权限码和菜单，权限码遵循 <code>模块:资源:动作</code>，例如 <code>example:item:view</code>。</li>
+          <li>管理员在角色管理中创建角色并勾选权限点，再在用户管理中为用户分配角色；新登录用户默认没有任何角色。</li>
+          <li>禁用用户会删除其现有 session，因此立即阻断会话；重新启用后需重新登录。</li>
+          <li>权限声明变更后重跑同步脚本。删除声明会级联移除角色上的该权限绑定，发布前要确认影响面。</li>
+        </ul>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>用途</th><th>接口</th><th>主要权限</th></tr></thead>
+            <tbody>
+              <tr><td>当前用户与退出</td><td><code>GET /api/auth/me</code><br><code>POST /api/auth/logout</code></td><td>需要登录；logout 撤销当前 cookie 对应的会话。</td></tr>
+              <tr><td>登录提供方</td><td><code>GET /api/auth/config</code><br><code>POST /api/auth/feishu/login-url</code><br><code>GET /api/auth/feishu/callback</code></td><td>当前是飞书专属匿名接口。</td></tr>
+              <tr><td>菜单与权限码</td><td><code>GET /api/modules</code></td><td>根据当前主体过滤菜单，返回权限码。</td></tr>
+              <tr><td>用户管理</td><td><code>/api/admin/users</code> 及其角色/状态更新接口</td><td><code>platform:user:view</code> / <code>platform:user:manage</code></td></tr>
+              <tr><td>角色与权限点管理</td><td><code>/api/admin/roles</code>、<code>/api/admin/permissions</code></td><td><code>platform:role:view</code> / <code>platform:role:manage</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="switch">
+        <h2>未来更换账号系统：能复用什么</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>能力 / 部分</th><th>当前可复用程度</th><th>判断</th></tr></thead>
+            <tbody>
+              <tr><td>内部账户、角色、权限及关联表</td><td><span class="verdict yes">可直接复用</span></td><td>前提是继续把外部身份映射到原有 <code>user.id</code>。业务模块的权限声明、服务端 <code>require()</code> 和 RBAC 查询无需知道 provider。</td></tr>
+              <tr><td><code>ExternalProfile</code> 与 <code>identity.upsert()</code></td><td><span class="verdict partial">大体复用</span></td><td>新登录系统须能映射稳定的 provider 标识、external ID 和资料字段。邮箱自动关联策略需重新确认是否安全。</td></tr>
+              <tr><td><code>session.py</code> 本地会话与 cookie</td><td><span class="verdict yes">多数场景复用</span></td><td>新认证成功后调用 <code>issue()</code> 即可继续沿用本地会话；若改为每请求验证外部 JWT 或代理身份头，则可选择不使用此会话层。</td></tr>
+              <tr><td>Principal / <code>current_principal</code></td><td><span class="verdict partial">需接入适配器</span></td><td>Principal 已经是稳定边界，但当前 provider 选择和依赖覆盖是 app 初始化时按飞书模式分支；新认证源需要新的请求解析实现。</td></tr>
+              <tr><td>后端登录路由和设置</td><td><span class="verdict no">需要修改</span></td><td><code>api.py</code> 定义飞书专属 URL；<code>config.py</code> 的 Literal 只有 dev_header/feishu；<code>gateway/app.py</code> 对飞书环境变量做启动校验。</td></tr>
+              <tr><td>前端登录页与 session store</td><td><span class="verdict no">需要修改</span></td><td>按钮、文案、配置响应和启动函数均直接命名 Feishu；换 provider 时需要同步改前端。</td></tr>
+              <tr><td>数据库迁移</td><td><span class="verdict yes">通常无需改表</span></td><td><code>user_identity</code> 已含 provider 与 external_id。若保留内部用户 ID 并能完成身份映射，通常无需 RBAC 迁移；但账号关联/历史身份数据可能需要一次性迁移或人工核对。</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>推荐切换步骤</h3>
+        <ol class="steps">
+          <li>先确认新系统的接入形态：OIDC/OAuth 回调、网关透传 JWT，还是 LDAP/其他协议；确认稳定 subject、邮箱是否验证、停用状态如何同步。</li>
+          <li>新增 provider 客户端或请求验证器，把验证结果归一为内部身份资料；认证成功后继续调用身份映射与现有 session，或者明确采用外部 token 直接解析 Principal。</li>
+          <li>替换/扩展 <code>AUTH_MODE</code> 配置、启动时配置验证和路由挂载；保留开发模式但禁止其成为生产回退路径。</li>
+          <li>调整登录页与前端 session store，使页面根据启用的登录方式展示入口，而不是将 provider 写死在组件与函数名中。</li>
+          <li>设计旧用户绑定策略：优先使用新系统的稳定 subject 显式绑定；邮箱只能在可信、已验证且组织策略允许时用于首次关联。必要时让用户先通过旧身份登录后绑定新身份。</li>
+          <li>上线前测试同一内部用户的角色/权限保持不变、停用用户无法重新建立会话、登出/过期行为正确，以及不同 provider 身份不会错误合并。</li>
+        </ol>
+        <div class="callout info"><b>保持低改动的关键：</b>继续把 RBAC 依赖在 <code>user.id</code> 上；身份切换只改变“如何验证外部凭证、如何得到身份资料、如何建立 Principal/会话”，不让外部 provider ID 进入业务权限表或模块代码。</div>
+      </section>
+
+      <section id="risks">
+        <h2>当前边界与改进建议</h2>
+        <ol>
+          <li><b>“只替换飞书目录”并不符合当前实现。</b>认证端点在 <code>auth/api.py</code>，模式校验在 <code>config.py</code> 和 <code>gateway/app.py</code>，登录入口在前端 store 和 LoginView；Feishu client 只是外部 API 客户端。架构规范第 4 节应修正文案，避免未来按错误预期估算工作。</li>
+          <li><b>邮箱匹配等同账号自动合并。</b><code>identity.upsert()</code> 会按 email 找到已有 <code>user.username</code> 并绑定身份。新 provider 必须确认邮箱来自可信来源且已验证，否则可能发生账号接管；建议明确 verified email 字段或采用用户主动绑定流程。</li>
+          <li><b>多身份已允许，但读取侧按单身份处理。</b>数据库仅约束 provider+external_id 唯一，允许一个用户关联多个身份；<code>/api/auth/me</code> 和用户列表却直接 outer join identity，未按 provider 聚合，用户多身份时可能返回重复用户行或不确定的头像/邮箱/最后登录时间。切换前应决定“一用户一个主展示身份”还是聚合资料，并修正查询。</li>
+          <li><b>本地账户 username 仍承担登录映射键。</b><code>username</code> 全局唯一，首次登录用规范化邮箱，缺少邮箱时退化为 provider_external_id。邮箱变更不会同步修改 username。新增身份源时需准备好缺邮箱、邮箱冲突和邮箱变更的处理规则。</li>
+          <li><b>认证开关的默认值是开发模式。</b><code>AUTH_MODE</code> 默认 <code>dev_header</code>，部署必须显式设成生产认证方式，并在部署配置/启动检查中防止漏配。不能把未知配置或 provider 故障静默回退为信任请求头。</li>
+          <li><b>Provider 抽象应按真实第二种接入提取。</b>当前不需要为尚未出现的 LDAP、OIDC、网关认证预设一个过度通用接口。出现第二个真实 provider 时，把 app 配置、认证路由/Principal provider、前端登录入口抽成可选择实现；OAuth 回调只是其中一种能力，不要强迫网关 JWT 也模拟 OAuth。</li>
+        </ol>
+        <div class="callout risk"><b>整体评估：</b>授权模型边界清晰，换认证系统时 RBAC 不需要推翻；切换点尚未完全模块化，因此目前属于“数据模型已预留、应用接入未插件化”。只要在账号合并与前端/启动配置处补齐适配，切换工作可局限在平台 auth 与登录界面，不应扩散到业务模块。</div>
+      </section>
+
+      <section id="references">
+        <h2>代码依据</h2>
+        <p>以下为本分析使用的主要实现与文档入口：</p>
+        <ul>
+          <li><a href="../server/platforms/auth/models.py">认证与 RBAC ORM 模型</a>、<a href="../server/platforms/auth/identity.py">外部身份映射</a>、<a href="../server/platforms/auth/session.py">会话实现</a></li>
+          <li><a href="../server/platforms/auth/principal.py">Principal 与认证依赖</a>、<a href="../server/platforms/auth/dependencies.py">接口权限依赖</a>、<a href="../server/platforms/auth/service.py">RBAC 查询与权限同步</a></li>
+          <li><a href="../server/platforms/auth/api.py">认证路由</a>、<a href="../server/platforms/auth/admin_api.py">用户与角色管理接口</a>、<a href="../server/platforms/gateway/app.py">应用装配与认证模式</a></li>
+          <li><a href="../server/platforms/migrations/versions/0001_rbac.py">RBAC 迁移</a>、<a href="../server/platforms/migrations/versions/0002_auth_session.py">身份与会话迁移</a></li>
+          <li><a href="../web/src/shared/core/session.ts">前端登录状态</a>、<a href="../web/src/shell/views/LoginView.vue">登录页</a>、<a href="../web/src/shared/core/permission.ts">按钮权限指令</a></li>
+          <li><a href="架构规范.md">架构规范</a>、<a href="../README.md">README 认证初始化说明</a></li>
+        </ul>
+      </section>
+    </main>
+  </div>
+  <footer>此文档描述当前仓库代码行为；若实现变更，请同步更新本分析与架构规范中的认证替换说明。</footer>
+</body>
+</html>

@@ -327,7 +327,7 @@
     <div class="rules">
       <div class="rule"><div class="index">R1</div><b>依赖方向只能向下</b><p><code>modules → platforms</code>。平台层永远不导入业务模块；业务模块不得反向依赖平台实现细节之外的上层组合代码。</p></div>
       <div class="rule"><div class="index">R2</div><b>模块之间只依赖契约</b><p>需要即时结果时调用对方 <code>contract.py</code> 暴露的函数，返回冻结 DTO；禁止 import 对方的 <code>service</code>、<code>models</code> 或 Repository。</p></div>
-      <div class="rule"><div class="index">R3</div><b>数据按 schema 隔离</b><p>每个模块只读写自己的 schema；禁止跨模块 JOIN 与外键。跨模块业务读取走契约，弱一致性通知走事件。允许模块表引用 <code>platform.app_user.id</code>。</p></div>
+      <div class="rule"><div class="index">R3</div><b>数据按 schema 隔离</b><p>每个模块只读写自己的 schema；禁止跨模块 JOIN 与外键。跨模块业务读取走契约，弱一致性通知走事件。允许模块表引用 <code>platform.user.id</code>。</p></div>
       <div class="rule"><div class="index">R4</div><b>命名保持端到端一致</b><p>模块名统一推导后端包、前端目录、API 前缀、路由、schema、权限码、配置前缀和迁移分支，不引入别名。</p></div>
       <div class="rule"><div class="index">R5</div><b>权限声明以后端为准</b><p>权限点与菜单在模块声明一次，前端从平台接口取得当前用户可见信息；接口用依赖校验，按钮按权限码控制。</p></div>
       <div class="rule"><div class="index">R6</div><b>跨模块事件只表达事实</b><p>发布方描述已发生的业务事实，不关心消费者。事件 payload 使用稳定数据结构，不传 ORM 实例，不借事件隐式调用同步业务。</p></div>
