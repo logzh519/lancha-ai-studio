@@ -11,7 +11,7 @@ COPY server/ ./
 
 # 再装各模块自己的依赖
 RUN set -e; for f in modules/*/requirements.txt; do \
-      [ -s "$f" ] && pip install --no-cache-dir -r "$f" || true; \
+      [ -s "$f" ] && pip install --no-cache-dir -r "$f"; \
     done
 
 # 迁移与权限点同步作为部署前置步骤单独执行，不放在容器启动命令里：
