@@ -235,13 +235,14 @@
 <main class="page">
   <header class="masthead" id="top">
     <div class="eyebrow">Lancha AI Studio · Engineering Architecture</div>
-    <h1>架构设计<br>与模块化开发规范</h1
-    <div class="mast-meta"><span>架构形态：模块化单体</span><span>工程形态：Monorepo</span><span>核心约束：模块边界可验证</span></div>
+    <h1>架构设计<br>与模块化开发规范</h1>
+    <p>一个代码库、一套平台能力、多个边界清晰的业务模块。API 进程与各模块的 worker 进程共用同一套模块装载流程，模块可以单独启停、单独部署后台执行。</p>
+    <div class="mast-meta"><span>架构形态：模块化单体</span><span>工程形态：Monorepo</span><span>运行形态：API 进程 + 按模块的 worker 进程</span><span>核心约束：模块边界可验证</span></div>
   </header>
 
   <nav class="contents" aria-label="文档目录">
     <a href="#summary">核心结论</a><a href="#principles">设计思想</a><a href="#architecture">架构分层</a>
-    <a href="#structure">工程结构</a><a href="#rules">模块规范</a><a href="#workflow">开发流程</a><a href="#db-migration">数据库迁移</a><a href="#evolution">演进策略</a>
+    <a href="#structure">工程结构</a><a href="#rules">模块规范</a><a href="#worker">后台 worker</a><a href="#workflow">开发流程</a><a href="#db-migration">数据库迁移</a><a href="#evolution">演进策略</a>
   </nav>
 
   <section id="summary">
@@ -279,14 +280,14 @@
         <div class="connector">↓ 按模块路由 · 契约调用 · 事件通知 ↓</div>
         <div class="arch-band"><div class="arch-label band-module">业务层<small>独立模块</small></div><div class="arch-items"><div class="arch-item"><b>业务 API / Service</b><span>用例与业务规则</span></div><div class="arch-item"><b>模型 / Repository</b><span>仅操作本模块数据</span></div><div class="arch-item"><b>契约 / 事件</b><span>受控跨模块通信</span></div><div class="arch-item"><b>前端模块</b><span>页面、组件、API、路由</span></div></div></div>
         <div class="connector">↙ 使用公共能力　　独立 schema　　调用外部依赖 ↘</div>
-        <div class="arch-band"><div class="arch-label band-platform">平台层<small>跨模块共性</small></div><div class="arch-items"><div class="arch-item"><b>身份与 RBAC</b><span>用户、角色、权限点</span></div><div class="arch-item"><b>Gateway / Registry</b><span>装载、注册、路由</span></div><div class="arch-item"><b>数据库 / 配置</b><span>连接、schema 约定</span></div><div class="arch-item"><b>事件基础设施</b><span>进程内通知契约</span></div></div></div>
-        <div class="arch-band"><div class="arch-label band-data">数据与依赖<small>按所有权隔离</small></div><div class="arch-items"><div class="arch-item"><b>PostgreSQL</b><span>platform 与 mod_* schema</span></div><div class="arch-item"><b>对象存储</b><span>媒体与大文件</span></div><div class="arch-item"><b>外部 API / 系统</b><span>由业务适配层封装</span></div><div class="arch-item"><b>后台执行</b><span>由具体业务方案定义</span></div></div></div>
+        <div class="arch-band"><div class="arch-label band-platform">平台层<small>跨模块共性</small></div><div class="arch-items"><div class="arch-item"><b>身份与 RBAC</b><span>用户、角色、权限点</span></div><div class="arch-item"><b>Gateway / Worker / Registry</b><span>装载、注册、路由；托管后台循环</span></div><div class="arch-item"><b>数据库 / 配置</b><span>连接、schema 约定</span></div><div class="arch-item"><b>事件基础设施</b><span>进程内通知契约</span></div></div></div>
+        <div class="arch-band"><div class="arch-label band-data">数据与依赖<small>按所有权隔离</small></div><div class="arch-items"><div class="arch-item"><b>PostgreSQL</b><span>platform 与 mod_* schema</span></div><div class="arch-item"><b>对象存储</b><span>媒体与大文件</span></div><div class="arch-item"><b>外部 API / 系统</b><span>由业务适配层封装</span></div><div class="arch-item"><b>worker 进程</b><span>按模块独立运行，由数据库状态驱动</span></div></div></div>
       </div>
       <p class="diagram-note"><b>职责分界：</b>平台负责“怎样装载和治理模块”；业务模块负责“业务如何工作”。平台不 import 业务实现，业务不越界读取其他模块的内部表。</p>
     </div>
     <div class="truth-grid">
-      <article class="truth actual"><h3>平台框架已具备的基础</h3><p>模块化单体与 Monorepo、平台 / 业务目录分层、FastAPI 网关和模块注册、RBAC、schema 与迁移约定、后端架构边界测试及前端边界 lint。</p></article>
-      <article class="truth direction"><h3>业务异步执行的设计方向</h3><p>长耗时工作由业务模块持有状态机、重试与执行策略。V5 设计提出模块声明后台循环，由 worker 启动；该执行方案应以对应业务实现与评审结论为准，不等同于 Celery 已是框架能力。</p></article>
+      <article class="truth actual"><h3>平台框架已具备的基础</h3><p>模块化单体与 Monorepo、平台 / 业务目录分层、FastAPI 网关和模块注册、RBAC、schema 与迁移约定、后端架构边界测试及前端边界 lint；worker 骨架：模块声明后台循环，平台负责异常退避重启、优雅停机、事件循环看门狗和 PostgreSQL 单例锁。</p></article>
+      <article class="truth direction"><h3>业务异步执行由模块自己实现</h3><p>平台只托管循环，不提供任务队列或调度平台（也没有 Celery）。任务表、状态机、租约、幂等与重试由业务模块在自己的 schema 中实现。tiktok_studio 等业务模块（V5 设计）后续按本文 worker 接入规范独立接入。</p></article>
     </div>
     <p class="diagram-note"><b>平台 API 命名：</b>认证为 <code>/api/auth/...</code>，管理接口为 <code>/api/admin/...</code>，模块与权限清单为 <code>/api/modules</code>；业务模块继续使用 <code>/api/&lt;模块名&gt;/...</code>。<code>auth</code>、<code>admin</code>、<code>modules</code> 为保留模块名。</p>
   </section>
@@ -298,22 +299,30 @@
 │  ├─ platforms/                 平台公共能力，不依赖业务 modules
 │  │  ├─ auth/                   身份、会话、RBAC 与权限校验
 │  │  ├─ gateway/                应用创建、模块装载、路由与中间件
-│  │  ├─ contract.py             平台与业务模块之间的模块契约
-│  │  ├─ db.py                   数据库接入与 schema 约定
+│  │  ├─ worker/                 worker 进程骨架：循环托管、看门狗、单例锁
+│  │  ├─ config.py               平台配置
+│  │  ├─ contract.py             平台与业务模块之间的模块契约（含 BackgroundLoop）
+│  │  ├─ db.py                   数据库接入、schema 约定与 session_scope
 │  │  ├─ events.py               进程内事件发布与订阅
+│  │  ├─ lifecycle.py            事件订阅、启动与关闭钩子（API 与 worker 共用）
 │  │  └─ registry.py             已加载模块注册表
 │  ├─ modules/
-│  │  ├─ example/                可复制的业务模块样板
+│  │  ├─ example_a/              可复制的业务模块样板
 │  │  │  ├─ api.py               HTTP 接口
 │  │  │  ├─ service.py           用例与业务逻辑
 │  │  │  ├─ models.py            本模块 ORM 模型
 │  │  │  ├─ contract.py          对外 DTO 与稳定能力
-│  │  │  ├─ module.py            名称、路由、菜单与权限声明
+│  │  │  ├─ config.py            本模块配置（环境变量前缀）
+│  │  │  ├─ worker/              后台循环，只由 module.py 引用
+│  │  │  ├─ module.py            名称、路由、菜单、权限与后台循环声明
+│  │  │  ├─ requirements.txt     本模块额外的 Python 依赖
 │  │  │  └─ migrations/          本模块迁移版本
+│  │  └─ example_b/              订阅 example_a 事件的第二个样板
 │  ├─ tests/platforms/           平台与架构约束测试
 │  ├─ tests/modules/&lt;name&gt;/      业务模块测试
 │  ├─ migrations/                Alembic 共用环境入口
-│  └─ scripts/                   权限同步等运维脚本
+│  ├─ scripts/                   迁移、权限同步等运维脚本
+│  └─ main.py                    启动入口：api（默认）/ worker &lt;模块名&gt;
 ├─ web/src/
 │  ├─ shell/                     应用壳、布局、路由与模块装载
 │  ├─ shared/core/               请求、会话、权限、模块契约
@@ -323,7 +332,7 @@
 └─ docs/                         架构规范、设计决策与使用说明</div>
     <div class="layer-notes">
       <article class="layer-note"><h3>platforms 是基础设施层</h3><p>只放多个业务模块共同需要的机制。业务专有的表、流程和规则不进入平台。</p></article>
-      <article class="layer-note"><h3>modules 是业务所有权边界</h3><p>模块拥有自己的 API、服务、模型、迁移、权限声明和测试；模块可以单独启停。</p></article>
+      <article class="layer-note"><h3>modules 是业务所有权边界</h3><p>模块拥有自己的 API、服务、模型、迁移、权限声明、后台循环和测试；模块可以单独启停，后台执行可以单独部署。</p></article>
       <article class="layer-note"><h3>shell 与 shared 不等于业务层</h3><p>shell 管应用组合；shared 放稳定、通用的前端能力，不成为跨模块共享业务逻辑的后门。</p></article>
     </div>
   </section>
@@ -339,6 +348,7 @@
       <div class="rule"><div class="index">R6</div><b>跨模块事件只表达事实</b><p>发布方描述已发生的业务事实，不关心消费者。事件 payload 使用稳定数据结构，不传 ORM 实例，不借事件隐式调用同步业务。</p></div>
       <div class="rule"><div class="index">R7</div><b>迁移跟随数据所有者</b><p>平台表与各模块表使用独立 Alembic 分支。模型变更必须提交迁移，并运行对应分支升级与 <code>alembic check</code>。</p></div>
       <div class="rule"><div class="index">R8</div><b>跨域 SQL 不绕过边界</b><p>架构测试可检查 Python import 与 ORM 外键，但无法证明任意原生 SQL 安全。模块禁止编写跨模块 schema SQL；高保障隔离需再配数据库角色权限。</p></div>
+      <div class="rule"><div class="index">R9</div><b>后台逻辑只进 worker</b><p>后台循环写在模块的 <code>worker/</code> 中，经 <code>ModuleSpec.loops</code> 声明，由 <code>python main.py worker &lt;模块名&gt;</code> 运行；API 进程内不启动后台任务。除 <code>module.py</code> 与 <code>worker/</code> 自身外，模块代码不得 import 自己的 <code>worker/</code>，由架构测试检查。</p></div>
     </div>
 
     <h3 style="margin:25px 0 10px;font-size:17px">模块命名映射</h3>
@@ -351,6 +361,8 @@
         <tr><td>数据库 schema</td><td><code>mod_&lt;模块名&gt;</code></td><td><code>mod_example</code></td></tr>
         <tr><td>权限码 / 事件名</td><td><code>模块:资源:动作</code> / <code>模块.事件</code></td><td><code>example:item:view</code> / <code>example.item_created</code></td></tr>
         <tr><td>配置 / 迁移分支</td><td><code>&lt;模块大写&gt;_</code> / <code>alembic -n &lt;模块名&gt;</code></td><td><code>EXAMPLE_</code> / <code>alembic -n example</code></td></tr>
+        <tr><td>后台循环 / 循环日志</td><td><code>&lt;模块名&gt;.&lt;循环名&gt;</code> / <code>worker.&lt;模块名&gt;.&lt;循环名&gt;</code>，循环名规则同模块名</td><td><code>example.report_item_count</code> / <code>worker.example.report_item_count</code></td></tr>
+        <tr><td>worker 服务</td><td><code>worker-&lt;模块名&gt;</code></td><td><code>worker-example</code></td></tr>
       </tbody>
     </table></div>
 
@@ -365,13 +377,82 @@
     </div>
   </section>
 
+  <section id="worker">
+    <div class="section-head"><div class="section-no">06 / WORKER</div><div><h2>后台 worker：平台托管，模块实现</h2><p class="section-intro">每个有后台逻辑的模块在自己的 <code>worker/</code> 中实现循环，平台只负责把循环跑稳。默认一个模块一个 worker 进程，模块剥离时连同 worker 一起带走。</p></div></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>职责</th><th>归属</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>装载与生命周期</td><td>平台</td><td>只装载目标模块及其 <code>depends_on</code>，与 API 共用 <code>lifecycle.py</code>：订阅事件、执行 <code>on_startup</code> / <code>on_shutdown</code>、关闭数据库连接。目标模块不在 <code>ENABLED_MODULES</code> 中时拒绝启动。</td></tr>
+        <tr><td>异常退避重启</td><td>平台</td><td>循环抛出异常后按 1、2、4…60 秒退避重启，单次运行超过 60 秒后退避重置。循环正常 return 视为结束，不再重启。</td></tr>
+        <tr><td>优雅停机</td><td>平台</td><td>收到 SIGTERM / SIGINT 后设置停机事件，<code>ctx.sleep</code> 立即返回 <code>False</code>；每个循环在自己的 <code>stop_timeout</code>（默认 30 秒）内退出，超时被取消。</td></tr>
+        <tr><td>事件循环看门狗</td><td>平台</td><td>事件循环阻塞超过 <code>WORKER_WATCHDOG_TIMEOUT</code>（默认 60 秒）时打印全部线程堆栈并退出进程，由容器重启；写日志卡住时 5 秒后强制退出。</td></tr>
+        <tr><td>单例循环</td><td>平台</td><td><code>singleton=True</code> 的循环先抢 PostgreSQL advisory lock，抢不到的副本待命；持锁期间每 10 秒探活，失锁即取消循环。</td></tr>
+        <tr><td>任务表、状态机、租约、幂等、重试</td><td>模块</td><td>写在模块自己的 schema 中。平台不提供任务队列、调度或跨模块执行。</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="communication" style="margin-top:14px">
+      <article class="comm-card"><div class="tag">模块侧 · 声明循环</div><h3>worker/__init__.py 与 module.py</h3><p>循环接收 <code>LoopContext</code>，用 <code>session_scope()</code> 读写本模块数据，用 <code>ctx.sleep</code> 等待并响应停机。</p><pre>async def report_item_count(ctx: LoopContext) -> None:
+    while True:
+        async with session_scope() as session:
+            count = await service.count_items(session)
+        ctx.logger.info("当前条目数：%d", count)
+        if not await ctx.sleep(30):   # 停机时返回 False
+            return
+
+LOOPS = (BackgroundLoop("report_item_count", report_item_count),)
+
+# module.py
+MODULE = ModuleSpec(name="example_a", ..., loops=LOOPS)</pre></article>
+      <article class="comm-card"><div class="tag">运行侧 · 进程拓扑</div><h3>python main.py worker</h3><p>默认每个模块一个进程；轻量模块可以合并，重循环可以用 <code>--loops</code> 拆到单独进程（仅限单个模块）。</p><pre>python main.py worker example_a                        # 一个模块一个进程
+python main.py worker a,b                              # 合并多个轻量模块
+python main.py worker example_a --loops report_item_count   # 只跑指定循环
+
+BackgroundLoop(
+    "dispatch", run,
+    stop_timeout=30.0,   # 停机等待上限
+    singleton=True,      # 多副本下只有一个在跑
+)</pre></article>
+    </div>
+
+    <h3 style="margin:25px 0 10px;font-size:17px">worker 接入规范</h3>
+    <div class="rules">
+      <div class="rule"><div class="index">W1</div><b>worker/ 无 import 副作用</b><p>API 进程也会经 <code>module.py</code> 导入 <code>worker/</code>，import 时不得建连接、开线程或启动外部进程；资源在循环内创建、在循环内释放。</p></div>
+      <div class="rule"><div class="index">W2</div><b>启动钩子必须幂等</b><p><code>on_startup</code> / <code>on_shutdown</code> 在 API 进程和每个装载该模块的 worker 进程中各执行一次，不得在钩子里启动后台任务。</p></div>
+      <div class="rule"><div class="index">W3</div><b>执行由数据库状态驱动</b><p>事件只在进程内派发，worker 发布的事件其他模块收不到。需要通知其他模块时写自己的状态表，由对方经 <code>contract.py</code> 查询；尽量少同步调用其他模块的契约，拆分时这些调用要改成远程调用。</p></div>
+      <div class="rule"><div class="index">W4</div><b>并发安全由模块保证</b><p>不能重复执行的循环声明 <code>singleton=True</code>；单例锁是尽力而为（不支持 PgBouncer transaction 模式），关键写入仍需幂等。其余循环在多副本下用 <code>FOR UPDATE SKIP LOCKED</code> 等方式抢任务。</p></div>
+      <div class="rule"><div class="index">W5</div><b>不阻塞事件循环</b><p>CPU 密集或同步阻塞操作放到线程池或子进程；阻塞超过看门狗阈值，进程会被终止。</p></div>
+      <div class="rule"><div class="index">W6</div><b>响应停机</b><p>等待一律用 <code>ctx.sleep</code>，并在返回 <code>False</code> 时尽快退出；compose 的 <code>stop_grace_period</code> 要大于该模块循环最大的 <code>stop_timeout</code>。</p></div>
+    </div>
+
+    <div class="dev-mode">
+      <article><h3>部署：每个模块一个 worker 服务</h3><p>按 <code>deploy/docker-compose.yml</code> 中的注释模板添加服务，与 <code>server</code>、<code>migrate</code> 共用 <code>x-backend-env</code>，保证 <code>ENABLED_MODULES</code> 一致。</p><pre>worker-&lt;模块名&gt;:
+  build: *server-build
+  command: ["python", "main.py", "worker", "&lt;模块名&gt;"]
+  restart: unless-stopped
+  stop_grace_period: 60s
+  environment:
+    &lt;&lt;: *backend-env
+    POSTGRES_POOL_SIZE: 3
+  depends_on:
+    postgres: { condition: service_healthy }
+    migrate: { condition: service_completed_successfully }</pre></article>
+      <article><h3>部署注意事项</h3><p>以下几点决定 worker 能否稳定运行和独立剥离。</p><pre># 连接池：每个持锁的单例循环额外占用一个连接
+# 系统依赖（浏览器、ffmpeg 等）放进模块自己的
+#   modules/&lt;模块名&gt;/worker.Dockerfile，不进 API 镜像
+# ENABLED_MODULES 不一致会出现「能建单但没人执行」的静默故障
+# 剥离模块：带走 modules/&lt;模块名&gt;/、对应 schema
+#   与 worker 服务，跨模块契约调用改为远程调用</pre></article>
+    </div>
+  </section>
+
   <section id="workflow">
-    <div class="section-head"><div class="section-no">06 / BUILD</div><div><h2>新增模块与交付检查</h2><p class="section-intro">沿用样板目录和统一验证命令，让新模块从第一天就符合装载、权限、数据和前端边界约定。</p></div></div>
+    <div class="section-head"><div class="section-no">07 / BUILD</div><div><h2>新增模块与交付检查</h2><p class="section-intro">沿用样板目录和统一验证命令，让新模块从第一天就符合装载、权限、数据和前端边界约定。</p></div></div>
     <div class="workflow">
-      <article class="step"><h3>复制样板</h3><p>从 <code>server/modules/example</code> 和 <code>web/src/modules/example</code> 建立同名模块目录。</p></article>
+      <article class="step"><h3>复制样板</h3><p>从 <code>server/modules/example_a</code>、<code>server/tests/modules/example_a</code> 和 <code>web/src/modules/example_a</code> 建立同名模块目录，并在 <code>alembic.ini</code> 加同名 section。</p></article>
       <article class="step"><h3>声明模块身份</h3><p>更新 module 名称、路由、菜单、权限码、schema、配置前缀与迁移分支。</p></article>
-      <article class="step"><h3>实现模块闭环</h3><p>将 API、用例逻辑、模型、前端页面和测试放在本模块边界内；跨模块使用契约或事件。</p></article>
-      <article class="step"><h3>验证后集成</h3><p>跑后端测试、前端 lint/typecheck、迁移一致性检查，再验证模块启停与权限表现。</p></article>
+      <article class="step"><h3>实现模块闭环</h3><p>将 API、用例逻辑、模型、前端页面和测试放在本模块边界内；有后台逻辑时在 <code>worker/</code> 声明 <code>LOOPS</code>，<code>module.py</code> 传入 <code>loops=LOOPS</code>；跨模块使用契约或事件。</p></article>
+      <article class="step"><h3>验证后集成</h3><p>跑后端测试、前端 lint/typecheck、迁移一致性检查，再验证模块启停、权限表现和 worker 的启动与停机。</p></article>
     </div>
     <h3 id="db-migration" style="margin:25px 0 10px;font-size:17px">数据库结构变更：从模型到生产</h3>
     <p class="section-intro">模型描述目标结构；Alembic 迁移描述如何从上一版数据库安全到达目标结构。自动生成只提供草稿，迁移文件必须审阅并与模型一起提交。</p>
@@ -391,13 +472,15 @@ python -m pytest tests/modules/example_a tests/platforms/test_architecture.py</p
     <h3 style="margin:22px 0 10px;font-size:17px">只开发一个模块：按需装载与安装依赖</h3>
     <div class="dev-mode">
       <article><h3>后端：只启用自己的模块</h3><p>把模块名写入 <code>server/.env</code>，平台依赖与模块依赖分开安装。</p><pre># server/.env
-ENABLED_MODULES=example
+ENABLED_MODULES=example_a
 
 cd server
 pip install -r requirements/dev.txt
-pip install -r modules/example/requirements.txt</pre><p style="margin-top:8px">平台与开发工具从 <code>requirements/dev.txt</code> 安装；只额外安装自己模块的 <code>requirements.txt</code>，其他模块不会被网关装载。</p></article>
+pip install -r modules/example_a/requirements.txt
+python main.py                        # API
+python main.py worker example_a       # 另开终端运行后台循环</pre><p style="margin-top:8px">平台与开发工具从 <code>requirements/dev.txt</code> 安装；只额外安装自己模块的 <code>requirements.txt</code>，其他模块不会被网关和 worker 装载。</p></article>
       <article><h3>前端：只装配自己的模块</h3><p>把模块名写入 <code>web/.env.local</code>，开发服务器仅动态导入启用模块入口。</p><pre># web/.env.local
-VITE_ENABLED_MODULES=example
+VITE_ENABLED_MODULES=example_a
 
 cd web
 npm install
@@ -412,23 +495,25 @@ npm run dev</pre><p style="margin-top:8px">模块入口按需加载并独立拆�
       <div class="check">权限由后端声明并在接口层校验，前端只消费授权结果</div>
       <div class="check">数据库变更包含本模块迁移，迁移检查通过</div>
       <div class="check">边界测试、模块测试、前端 lint 与 typecheck 通过</div>
+      <div class="check">后台循环经 <code>ModuleSpec.loops</code> 声明，<code>worker/</code> 无 import 副作用</div>
+      <div class="check">循环用 <code>ctx.sleep</code> 响应停机，不能重复执行的循环声明 <code>singleton=True</code></div>
     </div>
     <div class="closing"><strong>建议的标准验证命令：</strong>后端运行 <code>cd server &amp;&amp; pytest</code>；前端运行 <code>cd web &amp;&amp; npm run lint &amp;&amp; npm run typecheck</code>；涉及模型变更时运行对应迁移分支的 <code>alembic check</code>。</div>
   </section>
 
   <section id="evolution">
-    <div class="section-head"><div class="section-no">07 / NEXT</div><div><h2>演进策略：边界先行，部署随后</h2><p class="section-intro">模块化不是微服务的过渡期标签，而是当前架构的组织方式。是否拆进程，取决于明确的工程信号。</p></div></div>
+    <div class="section-head"><div class="section-no">08 / NEXT</div><div><h2>演进策略：边界先行，部署随后</h2><p class="section-intro">模块化不是微服务的过渡期标签，而是当前架构的组织方式。是否拆进程，取决于明确的工程信号。</p></div></div>
     <div class="evolution">
-      <article class="evo"><h3>现在：模块化单体</h3><p>统一代码库和运行载体；模块独立命名、数据归属、测试与权限；平台复用横向能力。</p></article>
+      <article class="evo"><h3>现在：模块化单体</h3><p>统一代码库和镜像；一个 API 进程加按模块的 worker 进程；模块独立命名、数据归属、测试、权限与后台执行；平台复用横向能力。</p></article>
       <div class="evo-arrow">→</div>
       <article class="evo current"><h3>出现信号：定位瓶颈</h3><p>独立扩缩容成为必要；故障需要隔离；资源争抢影响关键流程；模块需要独立发布或独立值守。</p></article>
       <div class="evo-arrow">→</div>
-      <article class="evo"><h3>按边界拆分：逐步服务化</h3><p>优先把已有模块边界变成进程边界；明确 API、数据所有权、可靠消息和运维责任，再引入分布式治理。</p></article>
+      <article class="evo"><h3>按边界拆分：逐步服务化</h3><p>优先把已有模块边界变成进程边界：模块的 worker 已是独立进程，剥离时再把 API 与跨模块契约调用改为远程调用；明确数据所有权、可靠消息和运维责任，再引入分布式治理。</p></article>
     </div>
-    <div class="closing"><strong>刻意暂缓：</strong>在没有真实需求前，不引入多租户、运行时微前端、分布式任务平台或模块脚手架等额外复杂度。异步执行、数据域和调度等能力按业务需要逐项补齐，不把规划能力描述成已落地能力。</div>
+    <div class="closing"><strong>刻意暂缓：</strong>在没有真实需求前，不引入多租户、运行时微前端、分布式任务平台或模块脚手架等额外复杂度。worker 骨架只负责托管循环；任务队列、定时调度、跨进程事件等能力按业务需要逐项补齐，不把规划能力描述成已落地能力。</div>
   </section>
 
-  <footer><span>lancha-ai-studio · 架构设计思想与模块化开发规范</span><span>依据：docs/架构规范.md · docs/架构设计-V5.0.0.md</span></footer>
+  <footer><span>lancha-ai-studio · 架构设计思想与模块化开发规范</span><span>依据：docs/架构规范.md · docs/superpowers/specs/2026-10-04-worker-framework-design.md</span></footer>
 </main>
 </body>
 </html>
