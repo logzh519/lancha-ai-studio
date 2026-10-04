@@ -5,7 +5,7 @@
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,6 +32,11 @@ class ScriptTemplateSummary(BaseModel):
     updated_at: datetime
 
 
+class ScriptTemplatePage(BaseModel):
+    items: list[ScriptTemplateSummary]
+    total: int
+
+
 class ScriptTemplateOut(ScriptTemplateSummary):
     content: str
 
@@ -45,12 +50,19 @@ async def _get_or_404(session: AsyncSession, template_id: int) -> ScriptTemplate
 
 @router.get(
     "/script-templates",
-    response_model=list[ScriptTemplateSummary],
+    response_model=ScriptTemplatePage,
     dependencies=[Depends(require("tiktok:script_template:view"))],
 )
-async def list_script_templates(session: AsyncSession = Depends(get_session)):
-    templates = await service.list_script_templates(session)
-    return [ScriptTemplateSummary.model_validate(t, from_attributes=True) for t in templates]
+async def list_script_templates(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    keyword: str | None = Query(None, max_length=128),
+    session: AsyncSession = Depends(get_session),
+):
+    offset = (page - 1) * page_size
+    templates, total = await service.list_script_templates(session, offset, page_size, (keyword or "").strip())
+    items = [ScriptTemplateSummary.model_validate(t, from_attributes=True) for t in templates]
+    return ScriptTemplatePage(items=items, total=total)
 
 
 @router.get(

@@ -45,12 +45,14 @@ const session = useSessionStore()
 <style scoped>
 .layout {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .sider {
   width: 220px;
   flex-shrink: 0;
+  overflow-y: auto;
   padding: var(--space-md);
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
@@ -86,8 +88,11 @@ const session = useSessionStore()
   color: var(--color-text-weak);
 }
 
+/* 框架本身不滚动；内容超出时在内容区内滚动，模块页面可用 height: 100% 撑满后自行做局部滚动 */
 .content {
   flex: 1;
+  min-height: 0;
+  overflow: auto;
   padding: var(--space-lg);
 }
 
@@ -102,6 +107,7 @@ const session = useSessionStore()
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-shrink: 0;
   gap: var(--space-md);
   height: 52px;
   padding: 0 var(--space-lg);

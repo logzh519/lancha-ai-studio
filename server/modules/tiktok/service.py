@@ -1,15 +1,22 @@
 """业务逻辑层：事务边界在调用方（get_session 依赖），这里只管业务。"""
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from modules.tiktok.models import SCHEMA, ScriptTemplate
 from modules.tiktok.schemas import ScriptTemplateFields
 
 
-async def list_script_templates(session: AsyncSession) -> list[ScriptTemplate]:
-    stmt = select(ScriptTemplate).order_by(ScriptTemplate.id.desc())
-    return list((await session.execute(stmt)).scalars())
+async def list_script_templates(
+    session: AsyncSession, offset: int, limit: int, keyword: str | None = None
+) -> tuple[list[ScriptTemplate], int]:
+    conditions = []
+    if keyword:
+        escaped = keyword.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        conditions.append(ScriptTemplate.name.ilike(f"%{escaped}%", escape="\\"))
+    total = await session.scalar(select(func.count()).select_from(ScriptTemplate).where(*conditions))
+    stmt = select(ScriptTemplate).where(*conditions).order_by(ScriptTemplate.id.desc()).offset(offset).limit(limit)
+    return list((await session.execute(stmt)).scalars()), total
 
 
 async def get_script_template(session: AsyncSession, template_id: int) -> ScriptTemplate | None:

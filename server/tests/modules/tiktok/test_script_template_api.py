@@ -50,7 +50,7 @@ async def test_crud_flow(client, session):
     assert body["content"] == PAYLOAD["content"]
     template_id = body["id"]
 
-    listed = (await client.get("/api/tiktok/script-templates", headers=admin)).json()
+    listed = (await client.get("/api/tiktok/script-templates", headers=admin)).json()["items"]
     assert [t["id"] for t in listed][:1] == [template_id]
     assert "content" not in listed[0]
 
@@ -67,6 +67,33 @@ async def test_crud_flow(client, session):
 
     assert (await client.delete(f"/api/tiktok/script-templates/{template_id}", headers=admin)).status_code == 204
     assert (await client.get(f"/api/tiktok/script-templates/{template_id}", headers=admin)).status_code == 404
+
+
+async def test_list_is_paginated(client, session):
+    admin = await _user(session, "tiktok_admin", superuser=True)
+    fields = ScriptTemplateFields(**PAYLOAD)
+    created = [(await service.create_script_template(session, fields, created_by=None)).id for _ in range(3)]
+
+    first = (await client.get("/api/tiktok/script-templates?page=1&page_size=2", headers=admin)).json()
+    second = (await client.get("/api/tiktok/script-templates?page=2&page_size=2", headers=admin)).json()
+    assert first["total"] == second["total"] >= 3
+    assert [t["id"] for t in first["items"]] == created[::-1][:2]
+    assert second["items"][0]["id"] == created[0]
+    assert (await client.get("/api/tiktok/script-templates?page_size=101", headers=admin)).status_code == 422
+
+
+async def test_list_filters_by_name_keyword(client, session):
+    admin = await _user(session, "tiktok_admin", superuser=True)
+    for name in ["夏季上衣开袋", "冬季外套试穿", "100%_纯棉"]:
+        await service.create_script_template(session, ScriptTemplateFields(**{**PAYLOAD, "name": name}), None)
+
+    async def names(keyword: str) -> list[str]:
+        response = await client.get("/api/tiktok/script-templates", params={"keyword": keyword}, headers=admin)
+        return [t["name"] for t in response.json()["items"]]
+
+    assert await names("开袋") == ["夏季上衣开袋"]
+    assert await names("%_") == ["100%_纯棉"]
+    assert "冬季外套试穿" not in await names("夏季")
 
 
 async def test_requires_permission(client, session):
