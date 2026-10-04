@@ -8,7 +8,7 @@ const session = useSessionStore()
 <template>
   <div class="layout">
     <aside class="sider">
-      <div class="brand">lancha-ai-studio</div>
+      <div class="brand">AI内容生产与运营平台</div>
       <nav>
         <p v-if="platform.menuTree.length === 0 && platform.platformMenus.length === 0" class="empty">
           暂无可见菜单
