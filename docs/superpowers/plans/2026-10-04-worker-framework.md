@@ -816,6 +816,46 @@ async def test_lock_loss_cancels_run(db_ready):
     with pytest.raises(SingletonLockLost):
         await asyncio.wait_for(task, 2)
     assert cancelled.is_set()
+
+
+async def test_run_failure_releases_lock(db_ready):
+    ran = []
+
+    async def failing(ctx):
+        raise RuntimeError("boom")
+
+    async def body(ctx):
+        ran.append(ctx.name)
+
+    with pytest.raises(RuntimeError):
+        await run_exclusive(_ctx(asyncio.Event(), "run_failure"), failing, **FAST)
+
+    await asyncio.wait_for(run_exclusive(_ctx(asyncio.Event(), "run_failure"), body, **FAST), 1)
+    assert ran == ["run_failure"]
+
+
+async def test_ping_timeout_counts_as_lock_loss(db_ready, monkeypatch):
+    cancelled = asyncio.Event()
+    ran = []
+
+    async def hanging(ctx):
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+
+    async def body(ctx):
+        ran.append(ctx.name)
+
+    monkeypatch.setattr("platforms.worker.singleton._PING", text("SELECT pg_sleep(1)"))
+    with pytest.raises(SingletonLockLost):
+        await asyncio.wait_for(run_exclusive(_ctx(asyncio.Event(), "ping_timeout"), hanging, **FAST), 2)
+    assert cancelled.is_set()
+
+    monkeypatch.undo()
+    await asyncio.wait_for(run_exclusive(_ctx(asyncio.Event(), "ping_timeout"), body, **FAST), 1)
+    assert ran == ["ping_timeout"]
 ```
 
 - [ ] **Step 2: 运行确认失败**
@@ -836,7 +876,6 @@ Expected: FAIL，`ModuleNotFoundError: No module named 'platforms.worker.singlet
 """
 
 import asyncio
-import contextlib
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -870,8 +909,7 @@ async def run_exclusive(
                 try:
                     await _run_locked(conn, ctx, run, check_interval)
                 finally:
-                    with contextlib.suppress(Exception):
-                        await conn.execute(_UNLOCK, {"key": key})
+                    await _release(conn, key)
                 return
         if not waiting_logged:
             ctx.logger.info("单例锁 %s 由其他副本持有，进入待命", key)
@@ -888,19 +926,30 @@ async def _run_locked(conn: AsyncConnection, ctx: LoopContext, run: LoopRunner, 
             if done:
                 return task.result()
             try:
-                await conn.execute(_PING)
+                await asyncio.wait_for(conn.execute(_PING), check_interval)
             except Exception as exc:
                 raise SingletonLockLost(f"单例锁连接失效：{ctx.module}.{ctx.name}") from exc
     finally:
         if not task.done():
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
+
+
+async def _release(conn: AsyncConnection, key: str) -> None:
+    """释放失败时作废连接：会话级锁随连接关闭而释放，避免带锁的连接回到连接池。"""
+    try:
+        await conn.execute(_UNLOCK, {"key": key})
+    except asyncio.CancelledError:
+        await conn.invalidate()
+        raise
+    except Exception:  # noqa: BLE001
+        await conn.invalidate()
 ```
 
 - [ ] **Step 4: 运行确认通过**
 
 Run: `pytest tests/platforms/test_worker_singleton.py -q`
-Expected: PASS（3 passed，不能是 skipped）
+Expected: PASS（5 passed，不能是 skipped）
 
 - [ ] **Step 5: 全量回归并提交**
 

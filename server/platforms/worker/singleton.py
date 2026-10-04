@@ -6,7 +6,6 @@
 """
 
 import asyncio
-import contextlib
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -40,8 +39,7 @@ async def run_exclusive(
                 try:
                     await _run_locked(conn, ctx, run, check_interval)
                 finally:
-                    with contextlib.suppress(Exception):
-                        await conn.execute(_UNLOCK, {"key": key})
+                    await _release(conn, key)
                 return
         if not waiting_logged:
             ctx.logger.info("单例锁 %s 由其他副本持有，进入待命", key)
@@ -58,10 +56,21 @@ async def _run_locked(conn: AsyncConnection, ctx: LoopContext, run: LoopRunner, 
             if done:
                 return task.result()
             try:
-                await conn.execute(_PING)
+                await asyncio.wait_for(conn.execute(_PING), check_interval)
             except Exception as exc:
                 raise SingletonLockLost(f"单例锁连接失效：{ctx.module}.{ctx.name}") from exc
     finally:
         if not task.done():
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
+
+
+async def _release(conn: AsyncConnection, key: str) -> None:
+    """释放失败时作废连接：会话级锁随连接关闭而释放，避免带锁的连接回到连接池。"""
+    try:
+        await conn.execute(_UNLOCK, {"key": key})
+    except asyncio.CancelledError:
+        await conn.invalidate()
+        raise
+    except Exception:  # noqa: BLE001
+        await conn.invalidate()

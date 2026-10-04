@@ -85,3 +85,43 @@ async def test_lock_loss_cancels_run(db_ready):
     with pytest.raises(SingletonLockLost):
         await asyncio.wait_for(task, 2)
     assert cancelled.is_set()
+
+
+async def test_run_failure_releases_lock(db_ready):
+    ran = []
+
+    async def failing(ctx):
+        raise RuntimeError("boom")
+
+    async def body(ctx):
+        ran.append(ctx.name)
+
+    with pytest.raises(RuntimeError):
+        await run_exclusive(_ctx(asyncio.Event(), "run_failure"), failing, **FAST)
+
+    await asyncio.wait_for(run_exclusive(_ctx(asyncio.Event(), "run_failure"), body, **FAST), 1)
+    assert ran == ["run_failure"]
+
+
+async def test_ping_timeout_counts_as_lock_loss(db_ready, monkeypatch):
+    cancelled = asyncio.Event()
+    ran = []
+
+    async def hanging(ctx):
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+
+    async def body(ctx):
+        ran.append(ctx.name)
+
+    monkeypatch.setattr("platforms.worker.singleton._PING", text("SELECT pg_sleep(1)"))
+    with pytest.raises(SingletonLockLost):
+        await asyncio.wait_for(run_exclusive(_ctx(asyncio.Event(), "ping_timeout"), hanging, **FAST), 2)
+    assert cancelled.is_set()
+
+    monkeypatch.undo()
+    await asyncio.wait_for(run_exclusive(_ctx(asyncio.Event(), "ping_timeout"), body, **FAST), 1)
+    assert ran == ["ping_timeout"]
