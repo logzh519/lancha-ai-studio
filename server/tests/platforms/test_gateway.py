@@ -21,7 +21,7 @@ async def client():
 async def test_health_lists_loaded_modules(client):
     response = await client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "modules": ["example_a", "example_b"]}
+    assert response.json() == {"status": "ok", "modules": ["example_a", "example_b", "tiktok"]}
 
 
 async def test_request_id_is_echoed_back(client):
