@@ -3,35 +3,91 @@
 路由自动挂载到 /api/tiktok 下，不要在这里重复写模块前缀。
 """
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from modules.tiktok import service
-from modules.tiktok.config import get_settings
+from modules.tiktok.models import ScriptTemplate
+from modules.tiktok.schemas import Category, ScriptTemplateFields, Status
 from platforms.auth.dependencies import require
+from platforms.auth.principal import Principal
 from platforms.db import get_session
 
 router = APIRouter()
 
 
-class AccountOut(BaseModel):
+class ScriptTemplateSummary(BaseModel):
     id: int
     name: str
+    category: Category
+    duration_seconds: int
+    status: Status
+    version: str
+    reference_video_url: str | None
+    created_by: int | None
+    created_at: datetime
+    updated_at: datetime
 
 
-class AccountCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=128)
+class ScriptTemplateOut(ScriptTemplateSummary):
+    content: str
 
 
-@router.get("/accounts", response_model=list[AccountOut], dependencies=[Depends(require("tiktok:account:view"))])
-async def list_accounts(session: AsyncSession = Depends(get_session)):
-    accounts = await service.list_accounts(session, get_settings().page_size)
-    return [AccountOut(id=account.id, name=account.name) for account in accounts]
+async def _get_or_404(session: AsyncSession, template_id: int) -> ScriptTemplate:
+    template = await service.get_script_template(session, template_id)
+    if template is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"脚本模板 {template_id} 不存在")
+    return template
 
 
-@router.post("/accounts", response_model=AccountOut, dependencies=[Depends(require("tiktok:account:create"))])
-async def create_account(payload: AccountCreate, session: AsyncSession = Depends(get_session)):
-    account = await service.create_account(session, payload.name)
-    await session.commit()
-    return AccountOut(id=account.id, name=account.name)
+@router.get(
+    "/script-templates",
+    response_model=list[ScriptTemplateSummary],
+    dependencies=[Depends(require("tiktok:script_template:view"))],
+)
+async def list_script_templates(session: AsyncSession = Depends(get_session)):
+    templates = await service.list_script_templates(session)
+    return [ScriptTemplateSummary.model_validate(t, from_attributes=True) for t in templates]
+
+
+@router.get(
+    "/script-templates/{template_id}",
+    response_model=ScriptTemplateOut,
+    dependencies=[Depends(require("tiktok:script_template:view"))],
+)
+async def get_script_template(template_id: int, session: AsyncSession = Depends(get_session)):
+    return ScriptTemplateOut.model_validate(await _get_or_404(session, template_id), from_attributes=True)
+
+
+@router.post("/script-templates", response_model=ScriptTemplateOut, status_code=status.HTTP_201_CREATED)
+async def create_script_template(
+    payload: ScriptTemplateFields,
+    principal: Principal = Depends(require("tiktok:script_template:create")),
+    session: AsyncSession = Depends(get_session),
+):
+    template = await service.create_script_template(session, payload, created_by=principal.user_id)
+    return ScriptTemplateOut.model_validate(template, from_attributes=True)
+
+
+@router.put(
+    "/script-templates/{template_id}",
+    response_model=ScriptTemplateOut,
+    dependencies=[Depends(require("tiktok:script_template:update"))],
+)
+async def update_script_template(
+    template_id: int, payload: ScriptTemplateFields, session: AsyncSession = Depends(get_session)
+):
+    template = await service.update_script_template(session, await _get_or_404(session, template_id), payload)
+    return ScriptTemplateOut.model_validate(template, from_attributes=True)
+
+
+@router.delete(
+    "/script-templates/{template_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require("tiktok:script_template:delete"))],
+)
+async def delete_script_template(template_id: int, session: AsyncSession = Depends(get_session)):
+    await service.delete_script_template(session, await _get_or_404(session, template_id))

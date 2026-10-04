@@ -9,10 +9,14 @@ MODULE = ModuleSpec(
     version="0.1.0",
     router=router,
     permissions=(
-        PermissionDef("tiktok:account:view", "查看 TikTok 账号"),
-        PermissionDef("tiktok:account:create", "创建 TikTok 账号"),
+        PermissionDef("tiktok:script_template:view", "查看爆款脚本"),
+        PermissionDef("tiktok:script_template:create", "新建爆款脚本"),
+        PermissionDef("tiktok:script_template:update", "修改爆款脚本"),
+        PermissionDef("tiktok:script_template:delete", "删除爆款脚本"),
     ),
     menus=(
-        MenuDef("TikTok 账号", "/tiktok/accounts", icon="list", order=30, permission="tiktok:account:view"),
+        MenuDef(
+            "爆款脚本库", "/tiktok/script-templates", icon="list", order=30, permission="tiktok:script_template:view"
+        ),
     ),
 )

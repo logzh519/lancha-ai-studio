@@ -1,0 +1,1527 @@
+模板ID：1
+模板名称：服装开袋试穿脚本
+适合类目:  全品类
+适合时长: 15
+脚本内容: 
+# 服装开袋试穿脚本｜完整母框架
+
+## 一、框架定位
+
+这套脚本不是普通：
+
+> 拆快递 → 介绍商品 → 穿上 → 广告CTA
+
+也不是：
+
+> 模特已经穿好 → 站着介绍衣服
+
+而是固定模拟：
+
+> **一个真实消费者站着打开刚收到的服装透明包装袋，第一时间发现商品设计，拿在手里快速验货，然后马上真实穿上，再继续验证上身效果。**
+
+整个视频的成交逻辑是：
+
+**Package Hook**  
+→ **Product Discovery**  
+→ **Physical Check**  
+→ **Real Try-On**  
+→ **Wearing Proof**  
+→ **Purchase Confidence**
+
+核心心理感受：
+
+> “她是真的刚收到这件衣服，然后现场拆、现场看、现场穿，我跟着她一起验货。”
+
+---
+
+# 二、最高优先级
+
+执行优先级固定：
+
+1. **商品真实性**
+2. **当前开袋试穿故事逻辑**
+3. **原爆款视频节奏**
+4. **真实连续穿衣**
+5. **动作必须产生商品证据**
+6. **口播与当前动作同步**
+7. **UGC原生感**
+8. **AI生成稳定性**
+9. **English Prompt字符限制**
+
+任何所谓“优化”都不能破坏前面这些优先级。
+
+---
+
+# 三、绝对不能混入其他脚本框架
+
+当前聊天窗口只执行：
+
+# 「服装开袋试穿脚本」
+
+禁止混入其他项目脚本的固定DNA。
+
+尤其不能擅自加入：
+
+- 镜子前展示
+- 电梯出场
+- 街拍跟随
+- 车旁展示
+- 停车场剧情
+- 朋友夸赞互动
+- 男性镜头外发现
+- 商场生活场景切换
+- 咖啡店验证
+- 多场景验证
+- 模特单视角硬口播框架
+- 坐着拆包
+
+除非用户明确要求修改当前框架。
+
+---
+
+# 四、固定空间逻辑
+
+整个开头必须：
+
+> **站立开袋**
+
+不是：
+
+- 坐床上；
+- 坐沙发；
+- 坐椅子；
+- 桌面俯拍开箱。
+
+人物从开头就是站立状态。
+
+视频环境：
+
+- 普通真实住宅室内；
+- 简洁；
+- 不抢商品；
+- 不需要专业布景；
+- 不需要镜子。
+
+核心空间逻辑：
+
+**站着拆袋**  
+→ **站着拿衣服验货**  
+→ **原地连续穿上**  
+→ **原地/小范围转身验货**
+
+不是生活方式短片。
+
+---
+
+# 五、包装袋固定规则
+
+这是当前框架的强制固定DNA。
+
+服装必须来自：
+
+> **透明、无任何品牌信息的普通服装塑料包装袋。**
+
+必须：
+
+- clear transparent plastic clothing bag
+- no brand logo
+- no text
+- no label
+- no printed graphics
+- no visible brand identity
+
+禁止：
+
+- 品牌快递盒
+- 牛皮纸盒
+- 电商纸箱
+- 礼盒
+- 品牌购物袋
+- Logo包装袋
+- 印字包装
+- 吊牌成为画面主体
+- 商业奢侈品开箱感
+
+固定英文约束可使用：
+
+```text
+PACKAGING PHYSICAL LOCK:
+
+The garment comes inside a clear transparent plastic clothing bag with no brand logo, no text, no label, and no printed graphics.
+
+The woman opens the plain transparent packaging bag by hand and removes the garment directly from the bag.
+
+Do not create branded packaging, boxes, shopping bags, logos, labels, text, or visible brand identity.
+```
+
+---
+
+# 六、收到商品图后的第一步：产品识别
+
+禁止看到图片后直接套模板。
+
+必须先做：
+
+# Product Analysis
+
+识别以下内容。
+
+## 1. Product Category
+
+判断：
+
+- Top
+- T-shirt
+- Knit top
+- Sweater
+- Sweatshirt
+- Hoodie
+- Blouse
+- Shirt
+- Dress
+- Pants
+- Two-piece set
+- Skirt
+- Jacket
+- Jumpsuit
+- 其他
+
+---
+
+## 2. Color
+
+只能按照图片判断真实颜色。
+
+例如：
+
+- solid black
+- navy blue
+- sage green
+- rust brown
+- dusty pink
+- taupe brown
+- ivory white
+
+不能为了文案“高级”自行换色。
+
+---
+
+## 3. Pattern / Surface
+
+检查：
+
+- pure solid
+- ribbed
+- plaid
+- stripe
+- floral
+- abstract print
+- gradient
+- lace
+- mesh
+- heathered visual texture
+
+如果图案存在，必须判断：
+
+- 方向
+- 大小
+- 密度
+- 分布
+- 正面/袖子/背面连续关系
+
+---
+
+## 4. Neckline
+
+例如：
+
+- crew neck
+- V-neck
+- square neck
+- collared V-neck
+- hooded V opening
+- stand collar
+- wide fold-over collar
+
+---
+
+## 5. Sleeve
+
+检查：
+
+- sleeve length
+- sleeve width
+- cuff
+- gathered cuff
+- ribbed cuff
+- thumb hole
+- puff shoulder
+- extended cuff
+- sleeve button detail
+
+---
+
+## 6. Body Silhouette
+
+判断：
+
+- fitted
+- slim
+- relaxed
+- straight
+- loose
+- oversized
+- tunic
+- peplum
+- fitted bodice + flared lower section
+
+不能随便把 relaxed 写成 oversized。
+
+---
+
+## 7. Hem
+
+必须重点看：
+
+- straight
+- curved
+- front/back equal
+- front shorter / back longer
+- rounded back
+- ribbed hem
+- gathered lower edge
+
+---
+
+## 8. Side Structure
+
+这是当前项目极高风险区域。
+
+必须查看：
+
+- 前后衣片是否连续连接；
+- 侧面是否完整；
+- 侧弧如何形成；
+- 是否存在抽褶；
+- 是否存在特殊结构。
+
+不能只看正面。
+
+---
+
+## 9. Back Structure
+
+必须检查：
+
+- 后摆
+- 帽子
+- 图案延续
+- 罗纹延续
+- 翻领后部
+- 腰线
+- 后背长度
+
+---
+
+# 七、只写图片能够确认的信息
+
+这是硬规则。
+
+图片能确认：
+
+- 颜色
+- V领
+- 圆领
+- 帽子
+- 拉链
+- 纽扣
+- 抽绳
+- 罗纹
+- 条纹
+- 格纹
+- 下摆
+- 袖型
+- 裤腿宽度
+- 腰线
+- 拇指孔
+- 侧腰抽褶
+
+图片不能确认时禁止自行写：
+
+- soft
+- breathable
+- stretchy
+- warm
+- comfortable
+- lightweight
+- slimming
+- flattering
+- true to size
+- wrinkle resistant
+- fleece
+- cotton
+- polyester
+- 厚度
+- 弹性
+- 面料成分
+
+除非用户额外提供商品资料。
+
+---
+
+# 八、核心购买理由生成逻辑
+
+不是简单列卖点。
+
+必须先回答：
+
+> **“这件产品真正区别普通同类商品的地方是什么？”**
+
+例如：
+
+普通：
+
+> V领 + 罗纹
+
+不够。
+
+应该转成：
+
+> V领结合竖向罗纹，让基础针织上衣出现更明显的结构感。
+
+---
+
+# 九、唯一 Core Proof Goal
+
+每条视频只能有一个主要证明目标。
+
+公式：
+
+**Product Feature**  
++  
+**Buyer Question**  
++  
+**Visual Proof**
+
+例如：
+
+### 拇指孔长袖
+
+Feature：
+
+> thumb hole cuff
+
+Buyer Question：
+
+> “袖口到底有什么特别？”
+
+Proof：
+
+> 试穿后拇指真实穿入孔位。
+
+---
+
+### 高低圆弧下摆
+
+Feature：
+
+> curved front-to-back hem
+
+Buyer Question：
+
+> “看起来是不是普通基础款？”
+
+Proof：
+
+> 侧身展示闭合侧弧和更长后摆。
+
+---
+
+### 侧腰抽褶
+
+Feature：
+
+> side ruching
+
+Buyer Question：
+
+> “这个版型穿起来真的有区别吗？”
+
+Proof：
+
+> 触碰抽褶 + 侧身展示腰部轮廓。
+
+---
+
+# 十、前三秒 Hook 逻辑
+
+此前已经加入六类Hook母逻辑。
+
+不是固定一句：
+
+> “Wait, I like this.”
+
+而是根据商品选择最适合的一种。
+
+## 1. 震惊发现型
+
+心理：
+
+> “我怎么现在才发现？”
+
+例如：
+
+> “I wish I found this sooner.”
+
+适合：
+
+- 特殊结构
+- 明显版型差异
+- 穿上反差大
+
+---
+
+## 2. 高级感 / 身份向往型
+
+心理：
+
+> “为什么这个看起来更贵？”
+
+例如：
+
+> “This looks way more expensive than I expected.”
+
+适合：
+
+- 基础高级款
+- 针织
+- 套装
+- 简约设计
+
+---
+
+## 3. 反常识型
+
+心理：
+
+> “你以为A，其实是B。”
+
+适合：
+
+- 宽松款
+- oversized
+- 特殊比例
+
+---
+
+## 4. 痛点解决型
+
+心理：
+
+> “你一直穿不好，问题可能在这里。”
+
+适合：
+
+- 比例型产品
+- 遮盖型设计
+- 特殊版型
+
+---
+
+## 5. 销量背书型
+
+只有有真实商品资料支持时使用。
+
+不能凭图片自行说：
+
+- TikTok爆款
+- sold out
+- best seller
+- everyone is buying it
+
+---
+
+## 6. 视觉冲击型
+
+例如：
+
+> “Wait until you see this on.”
+
+重点：
+
+停留率优先。
+
+---
+
+# 十一、前三秒 Hook 与动作必须绑定
+
+Hook不是独立广告文案。
+
+正确逻辑：
+
+**打开透明袋**  
+→ **商品露出**  
+→ **发现一个真实结构**  
+→ **Hook口播马上对应这个结构**
+
+例如：
+
+拇指孔：
+
+> “Wait, I didn’t realize the sleeves had this detail.”
+
+同时画面：
+
+> 她正在拿袖口看拇指孔。
+
+不能：
+
+口播讲袖口，画面却拿着领口。
+
+---
+
+# 十二、固定15秒时间轴
+
+当前最稳定版本：
+
+# 0.0–3.0s  
+## Standing Transparent Package Opening + Hook
+
+人物：
+
+- 站着；
+- 手持透明无品牌包装袋；
+- 快速打开；
+- 取出商品；
+- 商品立即进入镜头。
+
+这段必须同时完成：
+
+1. 开袋动作；
+2. 商品第一次出现；
+3. 第一核心设计被发现；
+4. Hook口播。
+
+不应该浪费3秒慢慢拆包装。
+
+---
+
+# 3.0–6.0s  
+## Physical Garment Check
+
+商品还没有穿。
+
+模特站着拿衣服检查：
+
+根据商品结构选择1–2个区域。
+
+例如：
+
+- V领
+- 纽扣
+- 拇指孔
+- 翻领
+- 拉链
+- 抽绳
+- 罗纹
+- 下摆
+- 抽褶
+- 裤腿
+
+重点：
+
+> 手和衣服必须产生真实接触。
+
+不是：
+
+站着拿衣服讲话。
+
+---
+
+# 6.0–10.0s  
+## Real Continuous Try-On
+
+必须真正穿衣。
+
+对于套头上衣：
+
+- 衣服从手里移动到身体；
+- 领口经过头部；
+- 一只手进袖；
+- 另一只手进袖；
+- 衣身向下；
+- 整理。
+
+对于拇指孔：
+
+必须进一步：
+
+- 双手进入袖子；
+- 拇指真实穿进对应孔位。
+
+对于套装：
+
+- 穿上上衣；
+- 穿上裤子；
+- 调整腰部。
+
+禁止：
+
+- instant transformation
+- magical outfit change
+- lens cover transformation
+- jump change
+- 第一秒突然穿好
+
+---
+
+# 10.0–13.0s  
+## Wearing Verification
+
+已经穿好后：
+
+针对 Core Proof Goal 做一次真实验货。
+
+例如：
+
+### 下摆
+- 整理前摆
+- 侧身
+- 手沿侧身下滑
+- 展示后摆
+
+### 侧腰抽褶
+- 手触碰抽褶
+- 转侧面
+- 展示腰部变化
+
+### 拇指孔
+- 展示拇指已穿入
+- 调整袖口
+- 手部自然活动
+
+### 拉链
+- 整理领口
+- 触碰拉链区域
+
+### 套装
+- 触碰腰部
+- 轻微侧身
+- 展示裤型
+
+---
+
+# 13.0–15.0s  
+## Final Result + CTA
+
+动作保持极短：
+
+- 回到自然正面或3/4角度；
+- 调整一个核心部位一次；
+- 微笑；
+- 向画面下方指一次。
+
+CTA动作固定：
+
+> **points downward once toward the bottom of the screen**
+
+不要写：
+
+> product link
+
+避免模型生成购物按钮/UI。
+
+---
+
+# 十三、产品互动规则
+
+动作必须符合：
+
+# Feature → Action → Evidence
+
+例如：
+
+V领：
+
+> fingers trace neckline
+
+证明：
+
+> neckline shape
+
+---
+
+罗纹：
+
+> palm moves vertically down fabric
+
+证明：
+
+> rib direction
+
+---
+
+侧腰抽褶：
+
+> fingers follow gathered folds
+
+证明：
+
+> ruching placement
+
+---
+
+拇指孔：
+
+> thumb enters cuff hole
+
+证明：
+
+> functional position
+
+---
+
+高低下摆：
+
+> turn side + hand follows curved edge
+
+证明：
+
+> front/back length difference
+
+---
+
+阔腿裤：
+
+> slight step / pant leg spread naturally
+
+证明：
+
+> leg width
+
+---
+
+# 十四、动作强度规则
+
+允许：
+
+- touch
+- trace
+- smooth
+- lightly pull
+- adjust
+- unfold
+- hold
+- spread
+- turn
+- rotate
+
+谨慎：
+
+- stretch
+- hard tug
+- strong pull
+
+因为可能导致：
+
+- 衣服变形
+- 错误弹性
+- 长度变化
+- 版型漂移
+
+---
+
+# 十五、侧面闭合结构规则
+
+这是当前框架最重要的商品稳定性规则之一。
+
+如果三视图确认侧面完整连接：
+
+必须物理锁定。
+
+通用版本：
+
+```text
+SIDE CONSTRUCTION PHYSICAL LOCK:
+
+The top has a fully closed and continuous side construction.
+
+Both left and right side seams are completely connected from the underarm area down to the lower hem.
+
+The front panel and back panel remain physically joined along the entire side body line, creating one continuous garment surface.
+
+Maintain the original closed side silhouette during unpacking, handling, try-on, movement, and garment interaction.
+```
+
+---
+
+# 十六、闭合侧弧规则
+
+如果商品是圆弧下摆，并且侧面完整连接：
+
+使用：
+
+```text
+SIDE CURVE PHYSICAL LOCK:
+
+The garment has a fully closed continuous side body construction.
+
+The front panel and back panel remain physically connected along the entire side body line from the underarm area down to the lower hem.
+
+The side silhouette forms a smooth continuous curved transition into the lower hem.
+
+Maintain the original closed side curve shape throughout unpacking, handling, try-on, movement, and garment interaction.
+
+The side body must remain one continuous garment surface.
+```
+
+特别注意：
+
+对于用户明确要求侧面闭合的商品，Prompt中不要出现以下词：
+
+- side slit
+- opening
+- split
+- vent
+
+哪怕是写：
+
+> no side slit
+
+也尽量不要。
+
+因为用户明确要求：
+
+> **连这个词都不要让生成模型看到。**
+
+---
+
+# 十七、拇指孔物理锁定
+
+如果存在拇指孔，不能只写：
+
+> thumb hole sleeve
+
+必须告诉模型具体在哪里。
+
+固定逻辑：
+
+```text
+THUMB HOLE PHYSICAL POSITION LOCK:
+
+The thumb holes are located at the very end of both extended sleeve cuffs.
+
+Each thumb hole is positioned on the inner wrist area of the cuff, where the thumb naturally passes through while the extended sleeve covers the back of the hand.
+
+Keep the thumb holes attached to the sleeve cuff edge and maintain their exact wrist-level position throughout wearing, movement, and hand interaction.
+
+Do not move the thumb holes upward onto the sleeve body.
+Do not remove the thumb holes.
+Do not generate regular sleeve cuffs.
+```
+
+必须理解：
+
+- 两只袖子都有；
+- 袖口最末端；
+- 手腕内侧；
+- 拇指穿过；
+- 袖口覆盖手背。
+
+---
+
+# 十八、抽绳物理位置锁定
+
+例如帽绳：
+
+```text
+DRAWSTRING PHYSICAL POSITION LOCK:
+
+The white drawstrings are attached to both sides of the hood opening.
+
+They hang vertically from the hood area down toward the upper chest.
+
+Keep both drawstrings visible, attached to the hood, and maintain their original length, position, and color throughout the video.
+```
+
+不能让帽绳：
+
+- 移到腰部
+- 消失
+- 改颜色
+- 长度漂移
+
+---
+
+# 十九、袖口纽扣位置锁定
+
+例如：
+
+```text
+SLEEVE BUTTON PHYSICAL POSITION LOCK:
+
+The decorative buttons are located on the outer side of both sleeve cuffs.
+
+Each sleeve cuff has three small buttons arranged vertically near the wrist area.
+
+Keep the buttons attached to the cuff area and maintain their exact position, spacing, and alignment throughout the video.
+```
+
+---
+
+# 二十、侧腰抽褶物理锁定
+
+例如：
+
+```text
+SIDE RUCHED DETAIL PHYSICAL LOCK:
+
+The garment has ruched detailing integrated into both side waist areas.
+
+The gathered horizontal folds are positioned along the side body near the waist and lower hem area.
+
+Keep the ruched folds attached to the side body construction and maintain their original position, direction, and density throughout unpacking, handling, try-on, movement, and garment interaction.
+
+Do not remove the ruched detail.
+Do not move the ruched detail to another area of the garment.
+Do not flatten the gathered side structure.
+```
+
+---
+
+# 二十一、图案/罗纹稳定性
+
+例如罗纹：
+
+必须锁：
+
+- 方向
+- 密度
+- 连续性
+
+例如：
+
+> vertical ribbed knit texture across front, sleeves and back
+
+不能让：
+
+- vertical → horizontal
+- ribbed → smooth
+- 前面有、背面消失
+
+---
+
+# 二十二、套装产品规则
+
+如果是两件套：
+
+必须明确：
+
+- top
+- pants/skirt
+- same color
+- same fabric appearance
+- separate pieces
+- matching relationship
+
+不能生成：
+
+- 连体裤
+- 连衣裙
+- 上衣裤子融合
+- 换色裤子
+- 完全不同材质
+
+---
+
+# 二十三、裤型锁定
+
+Wide-leg产品：
+
+必须明确：
+
+- full length
+- wide leg
+- both legs remain wide
+- width consistent during walking
+
+防止：
+
+- skinny
+- tapered
+- jogger
+- cropped
+
+---
+
+# 二十四、拉链锁定
+
+必须确定：
+
+- zipper location
+- zipper length
+- center alignment
+- neckline relationship
+
+例如短拉链：
+
+必须明确：
+
+> centered zipper ending around upper chest
+
+不能因为写“zip”就变成全开外套。
+
+---
+
+# 二十五、人物状态
+
+模特：
+
+- 成年女性
+- 真人消费者感
+- 自然表情
+- 不像专业模特
+- 不需要完美Pose
+
+不是：
+
+- runway model
+- commercial fashion model
+- host/presenter
+
+她是在：
+
+> 自己拆包验货。
+
+---
+
+# 二十六、镜头风格
+
+固定：
+
+- iPhone 15 native-camera look
+- handheld smartphone
+- slight natural shake
+- small framing corrections
+- realistic exposure
+- natural skin texture
+- subtle phone grain
+- mild noise
+- native natural color
+- smooth autofocus
+- 1080p+
+
+不是：
+
+- cinematic ad
+- gimbal
+- studio shoot
+- dolly
+- beauty commercial
+- slow motion
+- ultra shallow depth of field
+
+---
+
+# 二十七、画质原则
+
+不是越“高清广告”越好。
+
+要求：
+
+> **真实手机拍，但商品清楚。**
+
+必须：
+
+- garment sharply readable
+- accurate color
+- clear seams
+- clear special structures
+- no black crushing
+- no white overexposure
+- no texture smearing
+- no flicker
+
+---
+
+# 二十八、口播逻辑
+
+口播必须：
+
+- 真人同期说话
+- 准确口型
+- 美国TikTok消费者语气
+- 短
+- 像即时反应
+- 和当前动作同步
+
+不要：
+
+- 广告播音腔
+- 长篇解释
+- 专业卖货术语
+- 每条都完全一样
+
+---
+
+# 二十九、口播与视觉必须同步
+
+原则：
+
+# Voice → Action → Proof
+
+例如：
+
+说：
+
+> “I didn’t realize the sleeves had this detail.”
+
+这一秒必须：
+
+> 手正在展示袖口。
+
+说：
+
+> “You can see the shape from the side.”
+
+这一秒必须：
+
+> 人已经在侧面。
+
+不能：
+
+口播讲A，动作展示B。
+
+---
+
+# 三十、不可虚构营销事实
+
+Hook虽然可以更强，但不能凭图片虚构：
+
+- sold out
+- TikTok bestseller
+- everyone is buying it
+- $200 look
+- luxury material
+- celebrity favorite
+- viral
+- fleece
+- slimming
+
+除非用户提供对应事实。
+
+---
+
+# 三十一、CTA规则
+
+最后CTA：
+
+动作：
+
+> **向画面下方指一次。**
+
+不能：
+
+- 连续指
+- 指购物车
+- 指商品卡
+- point to product link
+
+英文推荐：
+
+> “Check it out below.”
+
+或者更自然的变体。
+
+但动作描述固定：
+
+> points downward once toward the bottom of the screen
+
+---
+
+# 三十二、通用禁止项
+
+基础禁止：
+
+- sitting package opening
+- branded packaging
+- mirror scenes
+- studio shooting
+- professional poses
+- instant transformation
+- duplicated person
+- distorted hands
+- extra limbs
+- clothing-body clipping
+- garment warping
+- subtitles
+- text overlays
+- logos
+- watermarks
+- generated shopping UI
+
+商品专属禁止：
+
+只根据当前商品增加。
+
+不要机械堆几十条无关限制。
+
+---
+
+# 三十三、Prompt写作顺序
+
+推荐严格按照：
+
+## 1. Video Format
+
+15s / 9:16 / UGC
+
+## 2. Core Flow
+
+Standing Package Opening → Product Discovery → Physical Check → Try-On → Wearing Verification
+
+## 3. Packaging Lock
+
+透明无品牌包装
+
+## 4. Product Fidelity
+
+颜色、领型、袖型、版型、下摆等
+
+## 5. Special Physical Locks
+
+根据商品：
+
+- Thumb Hole
+- Side Curve
+- Ruching
+- Drawstring
+- Button
+- Zipper
+- Pattern
+
+## 6. Timeline
+
+0–3  
+3–6  
+6–10  
+10–13  
+13–15
+
+## 7. Visual Quality
+
+iPhone UGC
+
+## 8. Avoid / Consistency
+
+只写必要限制。
+
+---
+
+# 三十四、English Prompt字符规则
+
+硬规则：
+
+> **English Prompt — Copy Ready ≤ 5000 characters**
+
+任何情况下不能超过5000。
+
+实际建议：
+
+> **默认控制 ≤4500 characters**
+
+计算包括：
+
+- 字母
+- 数字
+- 空格
+- 标点
+- 换行
+
+压缩顺序：
+
+先保留：
+
+1. Product Fidelity
+2. Special Physical Locks
+3. Timeline
+4. Actions
+5. Dialogue
+6. UGC quality
+7. Necessary negatives
+
+优先删除：
+
+- 重复形容词
+- 同义句
+- 无关场景限制
+- 重复负面词
+
+---
+
+# 三十五、最终固定输出结构
+
+以后模型收到服装图后，固定输出四部分。
+
+# 一、产品内容分析
+
+包含：
+
+- Product Identity
+- Color / Pattern
+- Visible Structure
+- Core features
+- Product Fidelity Lock
+- 特殊Physical Lock
+- 无法确认的信息
+
+---
+
+# 二、核心购买理由分析
+
+包含：
+
+- Core Purchase Reason
+- Core Proof Goal
+- Buyer Question
+- Evidence Chain
+
+---
+
+# 三、English Prompt — Copy Ready
+
+要求：
+
+- 一个完整代码块
+- 可直接复制
+- ≤5000 characters
+- 默认≤4500
+- 不夹中文解释
+
+---
+
+# 四、英文提示词对应中文翻译
+
+必须：
+
+- 完整对应英文Prompt
+- 不另创剧情
+- 不改变动作
+- 方便人工检查
+
+---
+
+# 三十六、生成前自检
+
+## 商品检查
+
+- 有没有认错品类？
+- 有没有认错颜色？
+- 有没有认错领口？
+- 有没有认错袖型？
+- 有没有认错下摆？
+- 有没有认错侧面结构？
+- 有没有漏掉背面结构？
+
+---
+
+## 开袋检查
+
+- 是不是站着？
+- 是不是透明袋？
+- 有没有品牌？
+- 有没有Logo/文字？
+
+---
+
+## Hook检查
+
+- 前3秒够不够快？
+- Hook是否和商品本身有关？
+- 是否虚构营销事实？
+- Hook是否和手部动作一致？
+
+---
+
+## Try-On检查
+
+- 是否真实穿衣？
+- 衣服是否从手中移动到身体？
+- 是否存在魔法换装？
+
+---
+
+## 物理结构检查
+
+问：
+
+> “这个商品最容易被AI生成错的3–5个结构是什么？”
+
+然后针对性锁定。
+
+例如：
+
+- thumb hole
+- side curve
+- ruching
+- zipper
+- drawstring
+- stripe
+- ribbing
+- pant width
+
+---
+
+## CTA检查
+
+只能：
+
+> 向画面下方指一次。
+
+---
+
+## 字符检查
+
+English Prompt：
+
+> **绝对 ≤5000 characters**
+
+---
+
+# 三十七、整套框架的底层生成公式
+
+最终可以压缩成：
+
+> **先从三视图认清商品 → 找到真正区别普通同类的核心设计 → 建立商品物理锁定 → 让人物站着打开透明无品牌包装袋 → 前3秒用商品发现 + 强Hook制造停留 → 手持商品快速验货 → 真实连续穿上 → 穿好后用动作证明核心结构 → 简短购买理由 + 向下指一次CTA。**
+
+---
+
+# 最终核心原则
+
+整个模型必须始终遵守：
+
+**框架固定，商品变量变化。**
+
+**包装固定，产品发现点变化。**
+
+**试穿必须真实，不能魔法换装。**
+
+**动作必须证明商品，而不是为了热闹。**
+
+**口播必须和动作同步。**
+
+**三视图是商品真实性最高依据。**
+
+**看不到的属性绝不脑补。**
+
+**特殊结构必须做物理位置锁定。**
+
+**侧面确认闭合时，不向模型暴露容易误导它的结构词。**
+
+**English Prompt绝不超过5000字符。**
+
+这份就可以作为当前 **「服装开袋试穿脚本」** 的完整母框架直接交给另一个模型执行。
+
+状态： formal
+版本：1.0.0
+参考视频：

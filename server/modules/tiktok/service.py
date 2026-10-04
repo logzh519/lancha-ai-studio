@@ -1,22 +1,51 @@
 """业务逻辑层：事务边界在调用方（get_session 依赖），这里只管业务。"""
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from modules.tiktok.models import Account
+from modules.tiktok.models import SCHEMA, ScriptTemplate
+from modules.tiktok.schemas import ScriptTemplateFields
 
 
-async def list_accounts(session: AsyncSession, limit: int) -> list[Account]:
-    stmt = select(Account).order_by(Account.id.desc()).limit(limit)
+async def list_script_templates(session: AsyncSession) -> list[ScriptTemplate]:
+    stmt = select(ScriptTemplate).order_by(ScriptTemplate.id.desc())
     return list((await session.execute(stmt)).scalars())
 
 
-async def create_account(session: AsyncSession, name: str) -> Account:
-    account = Account(name=name)
-    session.add(account)
+async def get_script_template(session: AsyncSession, template_id: int) -> ScriptTemplate | None:
+    return await session.get(ScriptTemplate, template_id)
+
+
+async def create_script_template(
+    session: AsyncSession, fields: ScriptTemplateFields, created_by: int | None, template_id: int | None = None
+) -> ScriptTemplate:
+    template = ScriptTemplate(id=template_id, created_by=created_by, **fields.model_dump())
+    session.add(template)
     await session.flush()
-    return account
+    if template_id is not None:
+        await _sync_id_sequence(session)
+    await session.refresh(template)
+    return template
 
 
-async def get_account(session: AsyncSession, account_id: int) -> Account | None:
-    return await session.get(Account, account_id)
+async def update_script_template(
+    session: AsyncSession, template: ScriptTemplate, fields: ScriptTemplateFields
+) -> ScriptTemplate:
+    for key, value in fields.model_dump().items():
+        setattr(template, key, value)
+    await session.flush()
+    await session.refresh(template)
+    return template
+
+
+async def delete_script_template(session: AsyncSession, template: ScriptTemplate) -> None:
+    await session.delete(template)
+    await session.flush()
+
+
+async def _sync_id_sequence(session: AsyncSession) -> None:
+    """指定主键插入不会推进自增序列，插入后把序列对齐到当前最大 ID，避免后续新建撞主键。"""
+    table = f"{SCHEMA}.{ScriptTemplate.__tablename__}"
+    await session.execute(
+        text(f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), (SELECT max(id) FROM {table}))")
+    )
