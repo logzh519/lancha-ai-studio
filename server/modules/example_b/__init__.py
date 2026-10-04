@@ -1,0 +1,1 @@
+"""Example B: consume and expose Example A's synchronous event."""

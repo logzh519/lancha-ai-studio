@@ -1,4 +1,4 @@
-"""模块的表全部建在自己的 schema（mod_example）下，不允许出现指向其他模块 schema 的外键。"""
+"""模块的表全部建在自己的 schema（mod_example_a）下，不允许出现指向其他模块 schema 的外键。"""
 
 from datetime import datetime
 
@@ -7,7 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from platforms.db import Base, module_schema
 
-SCHEMA = module_schema("example")
+SCHEMA = module_schema("example_a")
 
 
 class Item(Base):

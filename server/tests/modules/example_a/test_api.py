@@ -2,7 +2,7 @@
 
 import pytest
 
-from modules.example import contract, service
+from modules.example_a import contract, service
 
 pytestmark = pytest.mark.db
 

@@ -92,7 +92,7 @@ def test_rejects_unknown_enabled_module():
 
 
 def test_loads_real_modules():
-    assert [spec.name for spec in load_modules([])] == ["example"]
+    assert [spec.name for spec in load_modules([])] == ["example_a", "example_b"]
 
 
 def test_disabled_module_is_not_imported(tmp_path, monkeypatch):

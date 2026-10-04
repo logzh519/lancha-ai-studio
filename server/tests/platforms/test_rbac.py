@@ -83,14 +83,14 @@ async def client(session):
 
 async def test_request_without_permission_is_rejected(client, session):
     user = await _make_user(session)
-    response = await client.get("/api/example/items", headers={"X-User-Id": str(user.id)})
+    response = await client.get("/api/example_a/items", headers={"X-User-Id": str(user.id)})
     assert response.status_code == 403
-    assert "example:item:view" in response.json()["message"]
+    assert "example_a:item:view" in response.json()["message"]
 
 
 async def test_request_with_permission_passes(client, session):
-    user = await _make_user(session, codes=("example:item:view",))
-    response = await client.get("/api/example/items", headers={"X-User-Id": str(user.id)})
+    user = await _make_user(session, codes=("example_a:item:view",))
+    response = await client.get("/api/example_a/items", headers={"X-User-Id": str(user.id)})
     assert response.status_code == 200
 
 
@@ -99,7 +99,7 @@ async def test_menus_are_filtered_by_permission(client, session):
     response = await client.get("/api/modules", headers={"X-User-Id": str(plain.id)})
     assert response.json()["modules"][0]["menus"] == []
 
-    granted = await _make_user(session, codes=("example:item:view",))
+    granted = await _make_user(session, codes=("example_a:item:view",))
     response = await client.get("/api/modules", headers={"X-User-Id": str(granted.id)})
     menus = response.json()["modules"][0]["menus"]
-    assert [menu["path"] for menu in menus] == ["/example/items"]
+    assert [menu["path"] for menu in menus] == ["/example_a/items"]

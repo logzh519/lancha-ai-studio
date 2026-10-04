@@ -8,15 +8,20 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from modules.example import service
-
-
 @dataclass(frozen=True)
 class ItemView:
     id: int
     name: str
 
 
+@dataclass(frozen=True)
+class ItemCreated:
+    item_id: int
+    name: str
+
+
 async def get_item(session: AsyncSession, item_id: int) -> ItemView | None:
+    from modules.example_a import service
+
     item = await service.get_item(session, item_id)
     return None if item is None else ItemView(id=item.id, name=item.name)

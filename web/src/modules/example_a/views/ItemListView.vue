@@ -28,9 +28,9 @@ onMounted(refresh)
 
 <template>
   <section>
-    <h1>条目列表</h1>
+    <h1>Example A · 条目</h1>
     <!-- v-permission 做按钮级控制：没有创建权限的用户看不到这块 -->
-    <form v-permission="'example:item:create'" @submit.prevent="submit">
+    <form v-permission="'example_a:item:create'" @submit.prevent="submit">
       <input v-model="name" placeholder="条目名称" />
       <button type="submit">新增</button>
     </form>

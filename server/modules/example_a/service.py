@@ -3,7 +3,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from modules.example.models import Item
+from modules.example_a.models import Item
 
 
 async def list_items(session: AsyncSession, limit: int) -> list[Item]:

@@ -1,0 +1,1 @@
+"""Public contract for Example B; this demo module currently exports no operations."""

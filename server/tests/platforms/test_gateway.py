@@ -20,7 +20,7 @@ async def client():
 async def test_health_lists_loaded_modules(client):
     response = await client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "modules": ["example"]}
+    assert response.json() == {"status": "ok", "modules": ["example_a", "example_b"]}
 
 
 async def test_request_id_is_echoed_back(client):
@@ -38,7 +38,8 @@ async def test_unknown_path_uses_unified_error_body(client):
 
 async def test_module_router_is_mounted_under_module_prefix():
     paths = set(create_app(Settings(auth_mode="dev_header")).openapi()["paths"])
-    assert "/api/example/items" in paths
+    assert "/api/example_a/items" in paths
+    assert "/api/example_b/events" in paths
     assert "/api/modules" in paths
     assert "/api/auth/config" in paths
     assert "/api/admin/users" in paths
