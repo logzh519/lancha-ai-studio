@@ -3,7 +3,7 @@
 模块化单体框架骨架：一个后端进程按模块装载，一个前端工程按模块划分，公共能力只做一份。
 
 - 架构约定与开发流程见 [docs/架构规范.md](docs/架构规范.md)
-- `modules/example` 是模块样板，新建模块时复制改名即可，不含任何真实业务
+- `modules/example_a` 是模块样板，新建模块时复制改名即可，不含任何真实业务
 
 ## 快速开始
 
@@ -13,7 +13,7 @@ cd deploy && docker compose -p lancha up -d postgres
 cd ../server
 pip install -r requirements/dev.txt
 cp .env.example .env
-alembic -n platform upgrade head && alembic -n example upgrade head
+alembic -n platform upgrade head && alembic -n example_a upgrade head
 python scripts/sync_permissions.py
 python main.py                       # http://127.0.0.1:8000/health
 

@@ -4,9 +4,9 @@
     alembic -n platform revision --autogenerate -m "xxx"
     alembic -n platform upgrade head
 
-模块表（以 example 为例）：
-    alembic -n example revision --autogenerate -m "xxx"
-    alembic -n example upgrade head
+模块表（以 example_a 为例）：
+    alembic -n example_a revision --autogenerate -m "xxx"
+    alembic -n example_a upgrade head
 
 每个分支只管自己的 schema，版本表也在各自 schema 内，分支之间互不影响。
 新增模块后，在 alembic.ini 里补一个同名 section。
