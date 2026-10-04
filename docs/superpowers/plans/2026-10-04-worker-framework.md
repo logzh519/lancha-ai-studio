@@ -856,6 +856,30 @@ async def test_ping_timeout_counts_as_lock_loss(db_ready, monkeypatch):
     monkeypatch.undo()
     await asyncio.wait_for(run_exclusive(_ctx(asyncio.Event(), "ping_timeout"), body, **FAST), 1)
     assert ran == ["ping_timeout"]
+
+
+async def test_unlock_failure_invalidates_connection(db_ready, monkeypatch):
+    ran = []
+
+    async def body(ctx):
+        ran.append(ctx.name)
+
+    monkeypatch.setattr("platforms.worker.singleton._UNLOCK", text("SELECT 1/0"))
+    await asyncio.wait_for(run_exclusive(_ctx(asyncio.Event(), "unlock_failure"), body, **FAST), 1)
+    monkeypatch.undo()
+
+    async with session_scope() as session:
+        held = await session.scalar(
+            text(
+                "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND granted "
+                "AND database = (SELECT oid FROM pg_database WHERE datname = current_database()) "
+                "AND objid = (hashtextextended('worker_test.unlock_failure', 0) & 4294967295)::oid"
+            )
+        )
+    assert held == 0
+
+    await asyncio.wait_for(run_exclusive(_ctx(asyncio.Event(), "unlock_failure"), body, **FAST), 1)
+    assert ran == ["unlock_failure", "unlock_failure"]
 ```
 
 - [ ] **Step 2: 运行确认失败**
@@ -909,7 +933,7 @@ async def run_exclusive(
                 try:
                     await _run_locked(conn, ctx, run, check_interval)
                 finally:
-                    await _release(conn, key)
+                    await _release(conn, key, check_interval)
                 return
         if not waiting_logged:
             ctx.logger.info("单例锁 %s 由其他副本持有，进入待命", key)
@@ -935,10 +959,10 @@ async def _run_locked(conn: AsyncConnection, ctx: LoopContext, run: LoopRunner, 
             await asyncio.gather(task, return_exceptions=True)
 
 
-async def _release(conn: AsyncConnection, key: str) -> None:
-    """释放失败时作废连接：会话级锁随连接关闭而释放，避免带锁的连接回到连接池。"""
+async def _release(conn: AsyncConnection, key: str, timeout: float) -> None:
+    """释放失败或超时时作废连接：会话级锁随连接关闭而释放，避免带锁的连接回到连接池。"""
     try:
-        await conn.execute(_UNLOCK, {"key": key})
+        await asyncio.wait_for(conn.execute(_UNLOCK, {"key": key}), timeout)
     except asyncio.CancelledError:
         await conn.invalidate()
         raise
@@ -949,7 +973,7 @@ async def _release(conn: AsyncConnection, key: str) -> None:
 - [ ] **Step 4: 运行确认通过**
 
 Run: `pytest tests/platforms/test_worker_singleton.py -q`
-Expected: PASS（5 passed，不能是 skipped）
+Expected: PASS（6 passed，不能是 skipped）
 
 - [ ] **Step 5: 全量回归并提交**
 

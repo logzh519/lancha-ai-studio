@@ -39,7 +39,7 @@ async def run_exclusive(
                 try:
                     await _run_locked(conn, ctx, run, check_interval)
                 finally:
-                    await _release(conn, key)
+                    await _release(conn, key, check_interval)
                 return
         if not waiting_logged:
             ctx.logger.info("单例锁 %s 由其他副本持有，进入待命", key)
@@ -65,10 +65,10 @@ async def _run_locked(conn: AsyncConnection, ctx: LoopContext, run: LoopRunner, 
             await asyncio.gather(task, return_exceptions=True)
 
 
-async def _release(conn: AsyncConnection, key: str) -> None:
-    """释放失败时作废连接：会话级锁随连接关闭而释放，避免带锁的连接回到连接池。"""
+async def _release(conn: AsyncConnection, key: str, timeout: float) -> None:
+    """释放失败或超时时作废连接：会话级锁随连接关闭而释放，避免带锁的连接回到连接池。"""
     try:
-        await conn.execute(_UNLOCK, {"key": key})
+        await asyncio.wait_for(conn.execute(_UNLOCK, {"key": key}), timeout)
     except asyncio.CancelledError:
         await conn.invalidate()
         raise

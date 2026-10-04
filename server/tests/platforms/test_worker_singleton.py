@@ -125,3 +125,27 @@ async def test_ping_timeout_counts_as_lock_loss(db_ready, monkeypatch):
     monkeypatch.undo()
     await asyncio.wait_for(run_exclusive(_ctx(asyncio.Event(), "ping_timeout"), body, **FAST), 1)
     assert ran == ["ping_timeout"]
+
+
+async def test_unlock_failure_invalidates_connection(db_ready, monkeypatch):
+    ran = []
+
+    async def body(ctx):
+        ran.append(ctx.name)
+
+    monkeypatch.setattr("platforms.worker.singleton._UNLOCK", text("SELECT 1/0"))
+    await asyncio.wait_for(run_exclusive(_ctx(asyncio.Event(), "unlock_failure"), body, **FAST), 1)
+    monkeypatch.undo()
+
+    async with session_scope() as session:
+        held = await session.scalar(
+            text(
+                "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND granted "
+                "AND database = (SELECT oid FROM pg_database WHERE datname = current_database()) "
+                "AND objid = (hashtextextended('worker_test.unlock_failure', 0) & 4294967295)::oid"
+            )
+        )
+    assert held == 0
+
+    await asyncio.wait_for(run_exclusive(_ctx(asyncio.Event(), "unlock_failure"), body, **FAST), 1)
+    assert ran == ["unlock_failure", "unlock_failure"]
