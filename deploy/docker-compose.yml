@@ -2,6 +2,15 @@
 # 在 deploy 目录执行：docker compose -p lancha up -d
 name: lancha
 
+# server、migrate 与各 worker 共用：ENABLED_MODULES 不一致会出现「能建单但没人执行」的静默故障
+x-backend-env: &backend-env
+  POSTGRES_HOST: postgres
+  POSTGRES_USER: ${POSTGRES_USER:-lancha}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lancha}
+  POSTGRES_DB: ${POSTGRES_DB:-lancha_ai_studio}
+  # 为空表示加载全部模块；按模块分批上线时在这里指定
+  ENABLED_MODULES: ${ENABLED_MODULES:-}
+
 services:
   postgres:
     image: postgres:17
@@ -31,12 +40,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_USER: ${POSTGRES_USER:-lancha}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lancha}
-      POSTGRES_DB: ${POSTGRES_DB:-lancha_ai_studio}
-      ENABLED_MODULES: ${ENABLED_MODULES:-}
+    environment: *backend-env
 
   server:
     build: *server-build
@@ -47,6 +51,7 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
+      <<: *backend-env
       APP_HOST: 0.0.0.0
       AUTH_MODE: ${AUTH_MODE:-feishu}
       FEISHU_APP_ID: ${FEISHU_APP_ID:-}
@@ -54,14 +59,23 @@ services:
       FEISHU_REDIRECT_URI: ${FEISHU_REDIRECT_URI:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:8080}
-      POSTGRES_HOST: postgres
-      POSTGRES_USER: ${POSTGRES_USER:-lancha}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lancha}
-      POSTGRES_DB: ${POSTGRES_DB:-lancha_ai_studio}
-      # 为空表示加载全部模块；按模块分批上线时在这里指定
-      ENABLED_MODULES: ${ENABLED_MODULES:-}
     ports:
       - "8000:8000"
+
+  # 有后台循环的模块各自一个 worker 服务，复制下面的模板并替换 <模块名>：
+  # worker-<模块名>:
+  #   build: *server-build              # 需要系统依赖的模块改用 modules/<模块名>/worker.Dockerfile
+  #   command: ["python", "main.py", "worker", "<模块名>"]
+  #   restart: unless-stopped
+  #   stop_grace_period: 60s            # 大于该模块循环的最大 stop_timeout
+  #   environment:
+  #     <<: *backend-env
+  #     POSTGRES_POOL_SIZE: 3           # 每个持锁的单例循环额外占用一个连接
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     migrate:
+  #       condition: service_completed_successfully
 
   web:
     build:
