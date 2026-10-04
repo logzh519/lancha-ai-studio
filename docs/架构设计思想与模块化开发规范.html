@@ -167,6 +167,12 @@
   .step::before { content: "0" counter(step); display: block; margin-bottom: 9px; color: var(--green); font: 700 12px var(--mono); }
   .step h3 { margin: 0 0 5px; font-size: 14px; }
   .step p { margin: 0; color: var(--muted); font-size: 12px; }
+    .migration-flow { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; margin-top: 14px; border: 1px solid var(--line); background: var(--line); }
+    .migration-step { min-width: 0; padding: 18px 20px; background: var(--paper); }
+    .migration-step h4 { margin: 0 0 6px; font-size: 14px; }
+    .migration-step p { margin: 0; color: var(--muted); font-size: 12px; }
+    .migration-step pre { max-width: 100%; margin: 10px 0 0; padding: 11px 12px; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: #172d2a; color: #e1efe8; font: 11px/1.7 var(--mono); }
+    .migration-warning { margin-top: 10px; padding: 12px 15px; border-left: 3px solid var(--coral); background: var(--coral-soft); color: #713f31; font-size: 12px; }
   .dev-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-top: 14px; border: 1px solid var(--line); background: var(--line); }
   .dev-mode article { min-width: 0; padding: 18px 20px; background: var(--paper); }
   .dev-mode h3 { margin: 0 0 5px; font-size: 15px; }
@@ -199,6 +205,7 @@
     .arch-items { grid-template-columns: repeat(2, 1fr); }
     .layer-notes { grid-template-columns: 1fr 1fr; }
     .workflow { grid-template-columns: 1fr 1fr; }
+    .migration-flow { grid-template-columns: 1fr; }
     .evolution { grid-template-columns: 1fr; gap: 8px; }
     .evo-arrow { transform: rotate(90deg); min-height: 20px; }
   }
@@ -234,7 +241,7 @@
 
   <nav class="contents" aria-label="文档目录">
     <a href="#summary">核心结论</a><a href="#principles">设计思想</a><a href="#architecture">架构分层</a>
-    <a href="#structure">工程结构</a><a href="#rules">模块规范</a><a href="#workflow">开发流程</a><a href="#evolution">演进策略</a>
+    <a href="#structure">工程结构</a><a href="#rules">模块规范</a><a href="#workflow">开发流程</a><a href="#db-migration">数据库迁移</a><a href="#evolution">演进策略</a>
   </nav>
 
   <section id="summary">
@@ -366,6 +373,21 @@
       <article class="step"><h3>实现模块闭环</h3><p>将 API、用例逻辑、模型、前端页面和测试放在本模块边界内；跨模块使用契约或事件。</p></article>
       <article class="step"><h3>验证后集成</h3><p>跑后端测试、前端 lint/typecheck、迁移一致性检查，再验证模块启停与权限表现。</p></article>
     </div>
+    <h3 id="db-migration" style="margin:25px 0 10px;font-size:17px">数据库结构变更：从模型到生产</h3>
+    <p class="section-intro">模型描述目标结构；Alembic 迁移描述如何从上一版数据库安全到达目标结构。自动生成只提供草稿，迁移文件必须审阅并与模型一起提交。</p>
+    <div class="migration-flow">
+      <article class="migration-step"><h4>1. 修改所属模块的 ORM 模型</h4><p>表归属哪个 schema，就修改哪个模块的 <code>models.py</code>；平台表修改 <code>platforms</code> 模型。不要直接在生产数据库手工改表，也不要让多个模块共同拥有一张业务表。</p></article>
+      <article class="migration-step"><h4>2. 检查分支并生成编号草稿</h4><p>在 <code>server</code> 目录按 schema 所属分支生成。迁移编号按分支单独递增，使用 <code>--rev-id</code> 指定四位数字 ID，文件名由 ID 和描述 slug 组成。</p><pre>python -m alembic -n example_a history
+python -m alembic -n example_a revision --autogenerate --rev-id 0003 -m "add item status"
+# 示例生成：modules/example_a/migrations/versions/0003_add_item_status.py</pre><p style="margin-top:8px">此处假设该分支已有两个 revision；实际先查 history 并确认编号未重复，再取下一个编号。<code>down_revision</code> 必须指向该分支当前 head。已应用到共享环境的 revision ID 不得为了改名而修改。</p></article>
+      <article class="migration-step"><h4>3. 人工审阅并补全迁移</h4><p>确认 <code>upgrade()</code> 与 <code>downgrade()</code> 的对象和 schema 正确。重点检查重命名是否被误生成成删表/建表、非空字段如何填充旧行、唯一约束是否会撞现有数据，以及索引和外键是否符合模块边界。</p><p style="margin-top:8px">数据回填、字段拆分/合并、复杂约束和破坏性变更通常需要手写或修正迁移；自动生成无法推断业务语义。</p></article>
+      <article class="migration-step"><h4>4. 在隔离数据库验证新旧两条路径</h4><p>分别从空库完整升级，以及从上一发布版本的结构和数据升级；再跑模块测试和架构测试。测试夹具若使用 ORM <code>create_all</code>，它不会执行 Alembic 文件，不能代替迁移验证。</p><pre>python -m alembic -n example_a upgrade head
+python -m alembic -n example_a check
+python -m pytest tests/modules/example_a tests/platforms/test_architecture.py</pre></article>
+      <article class="migration-step"><h4>5. 提交并让部署任务升级</h4><p>提交模型与迁移文件。生产部署的 <code>migrate</code> 一次性服务运行 <code>scripts/migrate.py</code>，在后端启动前升级 platform 和已启用模块的迁移分支，并同步权限；迁移失败时后端不会启动。发布后检查迁移日志、健康检查和关键读写流程。</p></article>
+      <article class="migration-step"><h4>6. 对不兼容改动分阶段发布</h4><p>优先采用“扩展、迁移数据、收缩”：先增加兼容的新列/结构并发布兼容代码，再回填与切换读写，稳定后另发版本删除旧结构。滚动发布期间新旧代码可能同时访问数据库，不要在单次发布里删除仍被旧代码使用的列。</p></article>
+    </div>
+    <div class="migration-warning"><b>生产安全检查：</b>上线前做数据库备份并确认恢复方案。不要把 downgrade 当作常规回滚按钮：降级可能丢数据或无法逆转业务转换，优先准备向前修复迁移。权限同步会删除代码中已移除的权限及其角色授权；当前脚本按启用模块装载权限，部分启用模块时要确认不会把其他模块权限误删。</div>
     <h3 style="margin:22px 0 10px;font-size:17px">只开发一个模块：按需装载与安装依赖</h3>
     <div class="dev-mode">
       <article><h3>后端：只启用自己的模块</h3><p>把模块名写入 <code>server/.env</code>，平台依赖与模块依赖分开安装。</p><pre># server/.env
