@@ -49,6 +49,7 @@ async def run_worker(
 ) -> None:
     if not targets:
         raise WorkerConfigError("至少指定一个模块")
+    targets = list(dict.fromkeys(targets))
     if settings.enabled_modules:
         disabled = [name for name in targets if name not in settings.enabled_modules]
         if disabled:

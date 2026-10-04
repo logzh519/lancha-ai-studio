@@ -94,6 +94,17 @@ async def test_runs_lifecycle_around_loops_and_exits_when_all_finish(install_mod
     assert calls == ["startup", "demo.job", "shutdown"]
 
 
+async def test_duplicate_targets_run_loops_once(install_modules):
+    ran = []
+
+    async def job(ctx):
+        ran.append(ctx.name)
+
+    install_modules(_spec("demo", (BackgroundLoop("job", job),)))
+    await asyncio.wait_for(run_worker(_settings(), ["demo", "demo"]), 2)
+    assert ran == ["job"]
+
+
 async def test_sigterm_stops_loops_gracefully(install_modules):
     stopped = []
 

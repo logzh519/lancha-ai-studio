@@ -1,7 +1,7 @@
 # Worker 框架设计
 
 日期：2026-10-04
-状态：待评审
+状态：已实现
 
 ## 背景与目标
 
@@ -229,7 +229,7 @@ modules/<模块名>/
 | `tests/platforms/test_architecture.py` | 模块内非 `module.py` 代码不得引用自己的 `worker/` |
 | `tests/modules/example_a/test_worker.py`（db） | 示例循环跑一轮后退出并输出条目数 |
 
-标记 `db` 的用例需要 PostgreSQL。当前 WSL 未开启 Docker Desktop 集成，这些用例在本机会跳过，需在可用数据库的环境补跑。
+标记 `db` 的用例需要 PostgreSQL，本机由 `deploy` 中的 compose `postgres` 服务提供。
 
 ## 规范更新（`docs/架构规范.md`）
 

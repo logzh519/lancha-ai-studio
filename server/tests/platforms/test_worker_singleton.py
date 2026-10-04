@@ -15,6 +15,14 @@ pytestmark = pytest.mark.db
 FAST = {"retry_interval": 0.05, "check_interval": 0.05}
 
 
+def _held_lock(key: str) -> str:
+    return (
+        "locktype = 'advisory' AND granted "
+        "AND database = (SELECT oid FROM pg_database WHERE datname = current_database()) "
+        f"AND objid = (hashtextextended('{key}', 0) & 4294967295)::oid AND objsubid = 1"
+    )
+
+
 def _ctx(stopping: asyncio.Event, name: str) -> LoopContext:
     return LoopContext("worker_test", name, stopping, logging.getLogger(f"worker.worker_test.{name}"))
 
@@ -76,10 +84,7 @@ async def test_lock_loss_cancels_run(db_ready):
     await asyncio.sleep(0.2)
     async with session_scope() as session:
         await session.execute(
-            text(
-                "SELECT pg_terminate_backend(pid) FROM pg_locks "
-                "WHERE locktype = 'advisory' AND granted AND pid <> pg_backend_pid()"
-            )
+            text(f"SELECT pg_terminate_backend(pid) FROM pg_locks WHERE {_held_lock('worker_test.lock_loss')}")
         )
 
     with pytest.raises(SingletonLockLost):
@@ -139,11 +144,7 @@ async def test_unlock_failure_invalidates_connection(db_ready, monkeypatch):
 
     async with session_scope() as session:
         held = await session.scalar(
-            text(
-                "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND granted "
-                "AND database = (SELECT oid FROM pg_database WHERE datname = current_database()) "
-                "AND objid = (hashtextextended('worker_test.unlock_failure', 0) & 4294967295)::oid"
-            )
+            text(f"SELECT count(*) FROM pg_locks WHERE {_held_lock('worker_test.unlock_failure')}")
         )
     assert held == 0
 

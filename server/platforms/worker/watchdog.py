@@ -15,14 +15,21 @@ from collections.abc import Callable
 
 logger = logging.getLogger("platform.worker")
 
+# 卡死的主线程可能持有日志锁或 stderr 管道已满，写日志、打堆栈都可能阻塞，到期强制退出
+_EXIT_FALLBACK_SECONDS = 5.0
 
-def _exit_process() -> None:
+
+def _exit_process(lag: float, timeout: float) -> None:
+    fallback = threading.Timer(_EXIT_FALLBACK_SECONDS, os._exit, (1,))
+    fallback.daemon = True
+    fallback.start()
+    logger.critical("事件循环已阻塞 %.1f 秒，超过看门狗阈值 %.1f 秒，进程退出", lag, timeout)
     faulthandler.dump_traceback(file=sys.stderr, all_threads=True)
     os._exit(1)
 
 
 class Watchdog:
-    def __init__(self, timeout: float, on_timeout: Callable[[], None] = _exit_process):
+    def __init__(self, timeout: float, on_timeout: Callable[[float, float], None] = _exit_process):
         self._timeout = timeout
         self._on_timeout = on_timeout
         self._interval = min(1.0, timeout / 4)
@@ -55,6 +62,5 @@ class Watchdog:
         while not self._stopped.wait(self._interval):
             lag = time.monotonic() - self._last_tick
             if lag > self._timeout:
-                logger.critical("事件循环已阻塞 %.1f 秒，超过看门狗阈值 %.1f 秒，进程退出", lag, self._timeout)
-                self._on_timeout()
+                self._on_timeout(lag, self._timeout)
                 return

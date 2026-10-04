@@ -9,7 +9,7 @@ from platforms.worker.watchdog import Watchdog
 
 async def test_fires_when_event_loop_is_blocked():
     fired = threading.Event()
-    watchdog = Watchdog(0.2, on_timeout=fired.set)
+    watchdog = Watchdog(0.2, on_timeout=lambda lag, timeout: fired.set())
     watchdog.start()
     try:
         time.sleep(0.6)  # noqa: ASYNC251
@@ -20,7 +20,7 @@ async def test_fires_when_event_loop_is_blocked():
 
 async def test_does_not_fire_when_event_loop_is_healthy():
     fired = threading.Event()
-    watchdog = Watchdog(0.2, on_timeout=fired.set)
+    watchdog = Watchdog(0.2, on_timeout=lambda lag, timeout: fired.set())
     watchdog.start()
     try:
         await asyncio.sleep(0.6)
