@@ -5,6 +5,7 @@ loader 会在启动时校验命名规范（权限码以模块名开头、菜单�
 """
 
 from modules.example_a.api import router
+from modules.example_a.worker import LOOPS
 from platforms.contract import MenuDef, ModuleSpec, PermissionDef
 
 MODULE = ModuleSpec(
@@ -19,4 +20,5 @@ MODULE = ModuleSpec(
     menus=(
         MenuDef("A 条目", "/example_a/items", icon="list", order=10, permission="example_a:item:view"),
     ),
+    loops=LOOPS,
 )

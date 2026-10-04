@@ -52,6 +52,21 @@ def test_modules_only_import_each_other_contract():
     assert not offenders, f"跨模块只能 import <模块>.contract：{offenders}"
 
 
+def test_only_module_py_imports_own_worker():
+    """后台逻辑只经 ModuleSpec.loops 交给 worker 进程，API 等代码直接引用 worker/ 就等于在 API 里执行后台逻辑。"""
+    offenders = []
+    for name in discover_module_names():
+        root = SERVER / "modules" / name
+        worker_dir = root / "worker"
+        for path in root.rglob("*.py"):
+            if path == root / "module.py" or worker_dir in path.parents:
+                continue
+            for target in _import_targets(path):
+                if target == f"modules.{name}.worker" or target.startswith(f"modules.{name}.worker."):
+                    offenders.append((path.relative_to(SERVER).as_posix(), target))
+    assert not offenders, f"只有 module.py 可以引用本模块的 worker/：{offenders}"
+
+
 def test_every_table_lives_in_its_own_schema():
     """平台表在 platform schema，模块表在 mod_<模块名> schema，不允许落到 public。"""
     importlib.import_module("platforms.auth.models")

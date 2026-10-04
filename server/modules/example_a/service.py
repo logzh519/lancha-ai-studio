@@ -1,6 +1,6 @@
 """业务逻辑层：事务边界在调用方（get_session 依赖），这里只管业务。"""
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from modules.example_a.models import Item
@@ -20,3 +20,7 @@ async def create_item(session: AsyncSession, name: str) -> Item:
 
 async def get_item(session: AsyncSession, item_id: int) -> Item | None:
     return await session.get(Item, item_id)
+
+
+async def count_items(session: AsyncSession) -> int:
+    return await session.scalar(select(func.count()).select_from(Item))
