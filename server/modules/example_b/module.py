@@ -6,7 +6,7 @@ from platforms.contract import MenuDef, ModuleSpec, PermissionDef
 
 MODULE = ModuleSpec(
     name="example_b",
-    title="Example B",
+    title="Module System B",
     depends_on=("example_a",),
     router=router,
     permissions=(PermissionDef("example_b:event:view", "查看收到的事件"),),

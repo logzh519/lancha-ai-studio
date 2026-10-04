@@ -9,7 +9,7 @@ from platforms.contract import MenuDef, ModuleSpec, PermissionDef
 
 MODULE = ModuleSpec(
     name="example_a",
-    title="Example A",
+    title="Module System A",
     version="0.1.0",
     router=router,
     permissions=(
