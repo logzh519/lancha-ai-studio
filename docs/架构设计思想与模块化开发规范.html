@@ -423,6 +423,7 @@ BackgroundLoop(
       <div class="rule"><div class="index">W4</div><b>并发安全由模块保证</b><p>不能重复执行的循环声明 <code>singleton=True</code>；单例锁是尽力而为（不支持 PgBouncer transaction 模式），关键写入仍需幂等。其余循环在多副本下用 <code>FOR UPDATE SKIP LOCKED</code> 等方式抢任务。</p></div>
       <div class="rule"><div class="index">W5</div><b>不阻塞事件循环</b><p>CPU 密集或同步阻塞操作放到线程池或子进程；阻塞超过看门狗阈值，进程会被终止。</p></div>
       <div class="rule"><div class="index">W6</div><b>响应停机</b><p>等待一律用 <code>ctx.sleep</code>，并在返回 <code>False</code> 时尽快退出；compose 的 <code>stop_grace_period</code> 要大于该模块循环最大的 <code>stop_timeout</code>。</p></div>
+      <div class="rule"><div class="index">W7</div><b>子任务用 TaskGroup 收拢</b><p>循环内并发执行的子任务必须用 <code>asyncio.TaskGroup</code> 创建：循环被取消（停机超时、单例失锁）或异常重启时，子任务随之取消并等待结束，不会留下孤儿任务继续占用配额。子任务自己处理业务异常，否则一个失败会连带取消整组；被取消时的清理（如释放租约）只用于加速恢复，正确性依赖模块自己的租约与 fence。</p></div>
     </div>
 
     <div class="dev-mode">
