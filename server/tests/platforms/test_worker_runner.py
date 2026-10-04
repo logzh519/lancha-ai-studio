@@ -124,6 +124,26 @@ async def test_loop_ignoring_stop_is_cancelled_after_timeout(install_modules):
     assert cancelled == ["stubborn"]
 
 
+async def test_singleton_loop_runs_through_run_exclusive(install_modules, monkeypatch):
+    exclusive = []
+    ran = []
+
+    async def fake(ctx, run):
+        exclusive.append(ctx.name)
+        await run(ctx)
+
+    async def job(ctx):
+        ran.append(ctx.name)
+
+    monkeypatch.setattr(runner, "run_exclusive", fake)
+    install_modules(
+        _spec("demo", (BackgroundLoop("single", job, singleton=True), BackgroundLoop("plain", job)))
+    )
+    await asyncio.wait_for(run_worker(_settings(), ["demo"]), 2)
+    assert exclusive == ["single"]
+    assert sorted(ran) == ["plain", "single"]
+
+
 def test_cli_defaults_to_api():
     assert _parse_args([]).command is None
 
