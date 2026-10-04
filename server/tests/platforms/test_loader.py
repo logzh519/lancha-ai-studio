@@ -4,7 +4,7 @@ import importlib
 
 import pytest
 
-from platforms.contract import MenuDef, ModuleSpec, PermissionDef
+from platforms.contract import BackgroundLoop, MenuDef, ModuleSpec, PermissionDef
 from platforms.gateway.loader import (
     ModuleLoadError,
     _topo_sort,
@@ -66,6 +66,21 @@ def test_rejects_menu_referencing_undeclared_permission():
 def test_rejects_menu_with_missing_parent():
     with pytest.raises(ModuleLoadError, match="父菜单"):
         validate_spec(_spec(menus=(MenuDef("条目", "/demo/items", parent="/demo/root"),)), "demo")
+
+
+async def _noop(ctx) -> None:
+    return None
+
+
+def test_rejects_invalid_loop_name():
+    with pytest.raises(ModuleLoadError, match="循环名"):
+        validate_spec(_spec(loops=(BackgroundLoop("Bad-Name", _noop),)), "demo")
+
+
+def test_rejects_duplicate_loop_names():
+    loops = (BackgroundLoop("sync", _noop), BackgroundLoop("sync", _noop))
+    with pytest.raises(ModuleLoadError, match="重复的循环名"):
+        validate_spec(_spec(loops=loops), "demo")
 
 
 def test_detects_dependency_cycle():

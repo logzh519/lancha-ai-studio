@@ -63,6 +63,13 @@ def validate_spec(spec: ModuleSpec, directory: str) -> None:
         if "." not in event:
             raise ModuleLoadError(f"事件名 {event!r} 格式须为 <模块名>.<事件>")
 
+    loop_names = [loop.name for loop in spec.loops]
+    for loop_name in loop_names:
+        if not MODULE_NAME_PATTERN.match(loop_name):
+            raise ModuleLoadError(f"循环名 {loop_name!r} 不合规：只允许小写字母、数字、下划线，且以字母开头")
+    if len(set(loop_names)) != len(loop_names):
+        raise ModuleLoadError(f"模块 {spec.name} 存在重复的循环名")
+
 
 def _topo_sort(names: set[str], specs: dict[str, ModuleSpec]) -> list[ModuleSpec]:
     """依赖在前，被依赖方先启动；成环时报出环上的模块。"""
