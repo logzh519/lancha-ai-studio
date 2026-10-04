@@ -14,7 +14,6 @@ RUN set -e; for f in modules/*/requirements.txt; do \
       [ -s "$f" ] && pip install --no-cache-dir -r "$f"; \
     done
 
-# 迁移与权限点同步作为部署前置步骤单独执行，不放在容器启动命令里：
-#   docker compose run --rm server sh -c "alembic -n platform upgrade head && alembic -n example upgrade head"
-#   docker compose run --rm server python scripts/sync_permissions.py
+# 迁移与权限点同步由 docker-compose.yml 中的 migrate 服务（scripts/migrate.py）在 server 启动前执行，
+# 不放在容器启动命令里，避免多副本同时迁移
 CMD ["python", "main.py"]
