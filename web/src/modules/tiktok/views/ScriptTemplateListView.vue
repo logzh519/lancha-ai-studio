@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useSessionStore } from '@shared/core'
 import { computed, onMounted, ref } from 'vue'
 
 import {
@@ -11,6 +12,8 @@ import {
 
 const PAGE_SIZE = 20
 
+const session = useSessionStore()
+
 const templates = ref<ScriptTemplateSummary[]>([])
 const total = ref(0)
 const page = ref(1)
@@ -22,6 +25,11 @@ const loading = ref(true)
 const initialLoaded = ref(false)
 
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
+
+function isOwner(template: ScriptTemplateSummary): boolean {
+  if (session.user?.superuser) return true
+  return template.created_by !== null && template.created_by === session.user?.id
+}
 
 function search(): Promise<void> {
   keyword.value = keywordInput.value.trim()
@@ -56,6 +64,7 @@ async function load(target: number): Promise<void> {
 }
 
 async function remove(template: ScriptTemplateSummary): Promise<void> {
+  if (!isOwner(template)) return
   if (!window.confirm(`确定删除「${template.name}」？删除后不可恢复。`)) return
   try {
     await deleteScriptTemplate(template.id)
@@ -201,20 +210,29 @@ onMounted(() => load(1))
               </td>
               <td class="text-center text-weak text-sm">{{ new Date(template.updated_at).toLocaleString() }}</td>
               <td class="table-actions text-center">
-                <RouterLink
-                  :to="`/tiktok/script-templates/${template.id}`"
-                  class="action-link"
-                >
-                  编辑
-                </RouterLink>
-                <button
-                  v-permission="'tiktok:script_template:delete'"
-                  type="button"
-                  class="action-link danger"
-                  @click="remove(template)"
-                >
-                  删除
-                </button>
+                <template v-if="isOwner(template)">
+                  <RouterLink
+                    :to="`/tiktok/script-templates/${template.id}`"
+                    class="action-link"
+                  >
+                    编辑
+                  </RouterLink>
+                  <button
+                    type="button"
+                    class="action-link danger"
+                    @click="remove(template)"
+                  >
+                    删除
+                  </button>
+                </template>
+                <template v-else>
+                  <RouterLink
+                    :to="`/tiktok/script-templates/${template.id}`"
+                    class="action-link"
+                  >
+                    查看
+                  </RouterLink>
+                </template>
               </td>
             </tr>
             <tr v-if="initialLoaded && !loading && !templates.length && !error">
@@ -668,7 +686,7 @@ onMounted(() => load(1))
   transition: all var(--transition-fast);
 }
 
-.action-link:hover {
+.action-link:hover:not(:disabled) {
   background: var(--color-primary-light);
 }
 
@@ -676,8 +694,17 @@ onMounted(() => load(1))
   color: var(--color-danger);
 }
 
-.action-link.danger:hover {
+.action-link.danger:hover:not(:disabled) {
   background: var(--color-danger-light);
+}
+
+.action-link:disabled,
+.action-link.disabled {
+  color: var(--color-text-weak) !important;
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: auto;
+  background: transparent !important;
 }
 
 /* 空状态与加载中 */

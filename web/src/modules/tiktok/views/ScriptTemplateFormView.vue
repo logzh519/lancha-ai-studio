@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { usePlatformStore } from '@shared/core'
+import { useSessionStore } from '@shared/core'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -14,12 +14,18 @@ import {
 
 const route = useRoute()
 const router = useRouter()
-const platform = usePlatformStore()
+const session = useSessionStore()
 
 const templateId = computed(() => (route.params.id ? Number(route.params.id) : null))
-const editable = computed(() =>
-  platform.has(templateId.value === null ? 'tiktok:script_template:create' : 'tiktok:script_template:update'),
-)
+const createdBy = ref<number | null>(null)
+
+const isOwner = computed(() => {
+  if (templateId.value === null) return true
+  if (session.user?.superuser) return true
+  return createdBy.value !== null && createdBy.value === session.user?.id
+})
+
+const editable = computed(() => isOwner.value)
 
 const form = reactive<ScriptTemplateFields>({
   name: '',
@@ -36,15 +42,24 @@ const saving = ref(false)
 onMounted(async () => {
   if (templateId.value === null) return
   try {
-    const { name, category, duration_seconds, content, status, version, reference_video_url } =
-      await getScriptTemplate(templateId.value)
-    Object.assign(form, { name, category, duration_seconds, content, status, version, reference_video_url })
+    const data = await getScriptTemplate(templateId.value)
+    createdBy.value = data.created_by
+    Object.assign(form, {
+      name: data.name,
+      category: data.category,
+      duration_seconds: data.duration_seconds,
+      content: data.content,
+      status: data.status,
+      version: data.version,
+      reference_video_url: data.reference_video_url,
+    })
   } catch (e) {
     error.value = (e as Error).message
   }
 })
 
 async function submit(): Promise<void> {
+  if (!editable.value) return
   saving.value = true
   try {
     const fields = { ...form, reference_video_url: form.reference_video_url?.trim() || null }
@@ -72,11 +87,14 @@ async function submit(): Promise<void> {
           <span class="breadcrumb-separator">/</span>
           <RouterLink to="/tiktok/script-templates" class="breadcrumb-item">爆款视频脚本库</RouterLink>
           <span class="breadcrumb-separator">/</span>
-          <span class="breadcrumb-current">{{ templateId === null ? '新建脚本模版' : `脚本 #${templateId}` }}</span>
+          <span class="breadcrumb-current">{{ templateId === null ? '新建脚本模版' : (editable ? `编辑脚本 #${templateId}` : `查看脚本 #${templateId}`) }}</span>
         </div>
-        <h1>{{ templateId === null ? '新建爆款脚本' : `编辑脚本 #${templateId}` }}</h1>
+        <div class="title-with-badge">
+          <h1>{{ templateId === null ? '新建爆款脚本' : (editable ? `编辑脚本 #${templateId}` : `查看脚本 #${templateId}`) }}</h1>
+          <span v-if="templateId !== null && !editable" class="badge-readonly">只读浏览模式</span>
+        </div>
         <p class="header-desc">
-          标准化组织短视频核心钩子（Hook）、爆点反转、文案台词与分镜提示，沉淀爆款生产资产。
+          {{ templateId !== null && !editable ? '当前模版由其他成员创建，您处于只读查看模式，不可修改内容。' : '标准化组织短视频核心钩子（Hook）、爆点反转、文案台词与分镜提示，沉淀爆款生产资产。' }}
         </p>
       </div>
 
@@ -248,12 +266,30 @@ async function submit(): Promise<void> {
   font-weight: 500;
 }
 
+.title-with-badge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title-with-badge h1,
 .header-titles h1 {
   margin: 0;
   font-size: 22px;
   font-weight: 700;
   color: var(--color-text);
   letter-spacing: -0.01em;
+}
+
+.badge-readonly {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-subtle);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
 }
 
 .header-desc {
@@ -430,6 +466,16 @@ async function submit(): Promise<void> {
 .form-control:focus {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.form-control:disabled,
+.form-textarea:disabled {
+  background: var(--color-surface-subtle);
+  color: var(--color-text);
+  -webkit-text-fill-color: var(--color-text);
+  opacity: 0.88;
+  cursor: default;
+  border-color: var(--color-border);
 }
 
 .form-textarea {
