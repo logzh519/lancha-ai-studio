@@ -6,6 +6,7 @@
 """
 
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from sqlalchemy import URL
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
@@ -57,8 +58,9 @@ def get_engine() -> AsyncEngine:
     return _engine
 
 
-async def get_session() -> AsyncIterator[AsyncSession]:
-    """FastAPI 依赖：一个请求一个事务，正常返回时提交，抛异常时回滚。"""
+@asynccontextmanager
+async def session_scope() -> AsyncIterator[AsyncSession]:
+    """请求之外的数据库会话（后台循环、脚本）：正常结束时提交，抛异常时回滚。"""
     get_engine()
     assert _session_factory is not None
     async with _session_factory() as session:
@@ -68,6 +70,12 @@ async def get_session() -> AsyncIterator[AsyncSession]:
         except Exception:
             await session.rollback()
             raise
+
+
+async def get_session() -> AsyncIterator[AsyncSession]:
+    """FastAPI 依赖：一个请求一个事务，正常返回时提交，抛异常时回滚。"""
+    async with session_scope() as session:
+        yield session
 
 
 async def dispose_engine() -> None:

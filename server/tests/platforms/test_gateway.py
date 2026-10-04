@@ -3,6 +3,7 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from platforms import lifecycle
 from platforms.config import Settings
 from platforms.contract import ModuleSpec
 from platforms.gateway import app as gateway_app
@@ -59,7 +60,7 @@ async def test_shutdown_continues_after_hook_failure(monkeypatch):
     async def dispose():
         calls.append("dispose")
 
-    monkeypatch.setattr(gateway_app, "dispose_engine", dispose)
+    monkeypatch.setattr(lifecycle, "dispose_engine", dispose)
     app = create_app(Settings(auth_mode="dev_header"))
     app.router.lifespan_context = gateway_app._lifespan(
         [

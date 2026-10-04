@@ -1,12 +1,11 @@
 """应用装配：加载模块 → 注册事件订阅 → 挂载路由 → 启动生命周期钩子。"""
 
-import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from platforms import events, registry
+from platforms import registry
 from platforms.auth.admin_api import router as admin_router
 from platforms.auth.api import router as auth_router
 from platforms.auth.principal import (
@@ -16,34 +15,18 @@ from platforms.auth.principal import (
 )
 from platforms.config import Settings, get_settings
 from platforms.contract import ModuleSpec
-from platforms.db import dispose_engine
 from platforms.gateway.api import router as platform_router
 from platforms.gateway.errors import register_error_handlers
 from platforms.gateway.loader import load_modules
 from platforms.gateway.middleware import request_context
-
-logger = logging.getLogger("platform.gateway")
+from platforms.lifecycle import module_lifecycle, subscribe_events
 
 
 def _lifespan(modules: list[ModuleSpec]):
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        started: list[ModuleSpec] = []
-        try:
-            for spec in modules:
-                if spec.on_startup:
-                    await spec.on_startup()
-                started.append(spec)
-                logger.info("模块已启动：%s", spec.name)
+        async with module_lifecycle(modules):
             yield
-        finally:
-            for spec in reversed(started):
-                if spec.on_shutdown:
-                    try:
-                        await spec.on_shutdown()
-                    except Exception:
-                        logger.exception("模块关闭失败：%s", spec.name)
-            await dispose_engine()
 
     return lifespan
 
@@ -65,11 +48,7 @@ def create_app(settings: Settings | None = None, package: str = "modules") -> Fa
     else:
         auth_provider = None
 
-    events.clear()
-    for spec in modules:
-        for event, handlers in spec.subscriptions.items():
-            for handler in handlers:
-                events.subscribe(event, handler)
+    subscribe_events(modules)
 
     app = FastAPI(title="lancha-ai-studio", lifespan=_lifespan(modules))
     app.dependency_overrides[current_principal] = principal_dependency(auth_provider)
