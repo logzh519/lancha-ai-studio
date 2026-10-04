@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     postgres_pool_size: int = 5
     postgres_max_overflow: int = 10
 
+    # worker 事件循环看门狗阈值（秒）：循环阻塞超过该值即打印堆栈并退出进程，交给 compose 重启
+    worker_watchdog_timeout: float = 60.0
+
     @field_validator("cors_origins", "enabled_modules", mode="before")
     @classmethod
     def _split_csv(cls, value):
