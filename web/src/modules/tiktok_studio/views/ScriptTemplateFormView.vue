@@ -68,7 +68,7 @@ async function submit(): Promise<void> {
     } else {
       await updateScriptTemplate(templateId.value, fields)
     }
-    await router.push('/tiktok/script-templates')
+    await router.push('/tiktok_studio/script-templates')
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -85,7 +85,7 @@ async function submit(): Promise<void> {
         <div class="breadcrumb">
           <RouterLink to="/" class="breadcrumb-item">应用广场</RouterLink>
           <span class="breadcrumb-separator">/</span>
-          <RouterLink to="/tiktok/script-templates" class="breadcrumb-item">爆款视频脚本库</RouterLink>
+          <RouterLink to="/tiktok_studio/script-templates" class="breadcrumb-item">爆款视频脚本库</RouterLink>
           <span class="breadcrumb-separator">/</span>
           <span class="breadcrumb-current">{{ templateId === null ? '新建脚本模版' : (editable ? `编辑脚本 #${templateId}` : `查看脚本 #${templateId}`) }}</span>
         </div>
@@ -99,7 +99,7 @@ async function submit(): Promise<void> {
       </div>
 
       <div class="header-actions">
-        <RouterLink to="/tiktok/script-templates" class="btn-secondary">
+        <RouterLink to="/tiktok_studio/script-templates" class="btn-secondary">
           返回列表
         </RouterLink>
         <button

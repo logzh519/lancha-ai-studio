@@ -32,7 +32,7 @@ export interface ScriptTemplatePage {
   total: number
 }
 
-const BASE = '/tiktok/script-templates'
+const BASE = '/tiktok_studio/script-templates'
 
 export const listScriptTemplates = (page: number, pageSize: number, keyword = '') => {
   const query = new URLSearchParams({ page: String(page), page_size: String(pageSize) })

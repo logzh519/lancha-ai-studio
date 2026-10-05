@@ -130,8 +130,8 @@ onMounted(() => load(1))
         </form>
 
         <RouterLink
-          v-permission="'tiktok:script_template:create'"
-          to="/tiktok/script-templates/new"
+          v-permission="'tiktok_studio:script_template:create'"
+          to="/tiktok_studio/script-templates/new"
           class="btn-primary"
         >
           <svg viewBox="0 0 20 20" fill="currentColor" class="btn-icon">
@@ -178,7 +178,7 @@ onMounted(() => load(1))
             <tr v-for="template in templates" :key="template.id">
               <td class="text-center font-mono text-weak">#{{ template.id }}</td>
               <td class="font-bold text-main">
-                <RouterLink :to="`/tiktok/script-templates/${template.id}`" class="name-link">
+                <RouterLink :to="`/tiktok_studio/script-templates/${template.id}`" class="name-link">
                   {{ template.name }}
                 </RouterLink>
               </td>
@@ -226,7 +226,7 @@ onMounted(() => load(1))
               <td class="table-actions text-center">
                 <template v-if="isOwner(template)">
                   <RouterLink
-                    :to="`/tiktok/script-templates/${template.id}`"
+                    :to="`/tiktok_studio/script-templates/${template.id}`"
                     class="action-link"
                     :class="{ disabled: deletingId !== null }"
                   >
@@ -243,7 +243,7 @@ onMounted(() => load(1))
                 </template>
                 <template v-else>
                   <RouterLink
-                    :to="`/tiktok/script-templates/${template.id}`"
+                    :to="`/tiktok_studio/script-templates/${template.id}`"
                     class="action-link"
                     :class="{ disabled: deletingId !== null }"
                   >
@@ -259,8 +259,8 @@ onMounted(() => load(1))
                   <p>{{ keyword ? '没有匹配的爆款脚本' : '当前暂无脚本模板' }}</p>
                   <RouterLink
                     v-if="!keyword"
-                    v-permission="'tiktok:script_template:create'"
-                    to="/tiktok/script-templates/new"
+                    v-permission="'tiktok_studio:script_template:create'"
+                    to="/tiktok_studio/script-templates/new"
                     class="btn-primary btn-sm"
                   >
                     新建第一个脚本

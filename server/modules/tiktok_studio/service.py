@@ -3,8 +3,8 @@
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from modules.tiktok.models import SCHEMA, ScriptTemplate
-from modules.tiktok.schemas import ScriptTemplateFields
+from modules.tiktok_studio.models import SCHEMA, ScriptTemplate
+from modules.tiktok_studio.schemas import ScriptTemplateFields
 
 
 async def list_script_templates(

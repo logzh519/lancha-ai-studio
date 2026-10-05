@@ -65,7 +65,7 @@ const activeModule = computed(() => {
   if (!found) return null
 
   let gradient = 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)'
-  if (found.name === 'tiktok') {
+  if (found.name === 'tiktok_studio') {
     gradient = 'linear-gradient(135deg, #111827 0%, #fe2c55 100%)'
   } else if (found.name === 'example_b') {
     gradient = 'linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)'

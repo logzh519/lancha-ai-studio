@@ -1,6 +1,6 @@
 """路由层：只做参数校验和调用 service，不写业务逻辑。
 
-路由自动挂载到 /api/tiktok 下，不要在这里重复写模块前缀。
+路由自动挂载到 /api/tiktok_studio 下，不要在这里重复写模块前缀。
 """
 
 from datetime import datetime
@@ -9,9 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from modules.tiktok import service
-from modules.tiktok.models import ScriptTemplate
-from modules.tiktok.schemas import Category, ScriptTemplateFields, Status
+from modules.tiktok_studio import service
+from modules.tiktok_studio.models import ScriptTemplate
+from modules.tiktok_studio.schemas import Category, ScriptTemplateFields, Status
 from platforms.auth.dependencies import require
 from platforms.auth.principal import Principal
 from platforms.db import get_session
@@ -51,7 +51,7 @@ async def _get_or_404(session: AsyncSession, template_id: int) -> ScriptTemplate
 @router.get(
     "/script-templates",
     response_model=ScriptTemplatePage,
-    dependencies=[Depends(require("tiktok:script_template:view"))],
+    dependencies=[Depends(require("tiktok_studio:script_template:view"))],
 )
 async def list_script_templates(
     page: int = Query(1, ge=1),
@@ -68,7 +68,7 @@ async def list_script_templates(
 @router.get(
     "/script-templates/{template_id}",
     response_model=ScriptTemplateOut,
-    dependencies=[Depends(require("tiktok:script_template:view"))],
+    dependencies=[Depends(require("tiktok_studio:script_template:view"))],
 )
 async def get_script_template(template_id: int, session: AsyncSession = Depends(get_session)):
     return ScriptTemplateOut.model_validate(await _get_or_404(session, template_id), from_attributes=True)
@@ -77,7 +77,7 @@ async def get_script_template(template_id: int, session: AsyncSession = Depends(
 @router.post("/script-templates", response_model=ScriptTemplateOut, status_code=status.HTTP_201_CREATED)
 async def create_script_template(
     payload: ScriptTemplateFields,
-    principal: Principal = Depends(require("tiktok:script_template:create")),
+    principal: Principal = Depends(require("tiktok_studio:script_template:create")),
     session: AsyncSession = Depends(get_session),
 ):
     template = await service.create_script_template(session, payload, created_by=principal.user_id)
@@ -88,7 +88,7 @@ async def create_script_template(
 @router.put(
     "/script-templates/{template_id}",
     response_model=ScriptTemplateOut,
-    dependencies=[Depends(require("tiktok:script_template:update"))],
+    dependencies=[Depends(require("tiktok_studio:script_template:update"))],
 )
 async def update_script_template(
     template_id: int, payload: ScriptTemplateFields, session: AsyncSession = Depends(get_session)
@@ -101,7 +101,7 @@ async def update_script_template(
 @router.delete(
     "/script-templates/{template_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require("tiktok:script_template:delete"))],
+    dependencies=[Depends(require("tiktok_studio:script_template:delete"))],
 )
 async def delete_script_template(template_id: int, session: AsyncSession = Depends(get_session)):
     await service.delete_script_template(session, await _get_or_404(session, template_id))

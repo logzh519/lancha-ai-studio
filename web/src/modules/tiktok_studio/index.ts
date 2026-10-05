@@ -3,22 +3,22 @@
 import { defineModule } from '@shared/core'
 
 export default defineModule({
-  name: 'tiktok',
+  name: 'tiktok_studio',
   routes: [
     {
       path: 'script-templates',
       component: () => import('./views/ScriptTemplateListView.vue'),
-      meta: { permission: 'tiktok:script_template:view' },
+      meta: { permission: 'tiktok_studio:script_template:view' },
     },
     {
       path: 'script-templates/new',
       component: () => import('./views/ScriptTemplateFormView.vue'),
-      meta: { permission: 'tiktok:script_template:create' },
+      meta: { permission: 'tiktok_studio:script_template:create' },
     },
     {
       path: 'script-templates/:id',
       component: () => import('./views/ScriptTemplateFormView.vue'),
-      meta: { permission: 'tiktok:script_template:view' },
+      meta: { permission: 'tiktok_studio:script_template:view' },
     },
   ],
 })

@@ -20,14 +20,14 @@ interface ModuleMeta {
 }
 
 const MODULE_EXTRAS: Record<string, ModuleMeta> = {
-  tiktok: {
+  tiktok_studio: {
     description: '专注于海外短视频爆款内容孵化。支持爆款脚本库结构化拆解、类目与时长推荐及参考视频关联管理。',
     category: 'tiktok',
     categoryLabel: '社媒矩阵',
     tags: ['爆款脚本库', '短视频生产', '类目匹配', '参考视频'],
     iconType: 'tiktok',
     gradient: 'linear-gradient(135deg, #000000 0%, #1e1e2d 50%, #fe2c55 100%)',
-    defaultRoute: '/tiktok/script-templates',
+    defaultRoute: '/tiktok_studio/script-templates',
   },
   example_a: {
     description: '核心生产流与条目生命周期管理，演示业务模块状态持久化与基于总线的事件广播。',

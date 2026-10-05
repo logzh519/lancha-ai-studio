@@ -1,6 +1,6 @@
 """从 txt 导入一条爆款脚本模板，模板 ID 已存在时跳过。
 
-在 server 目录执行：python -m modules.tiktok.scripts.import_script_template [txt 路径]
+在 server 目录执行：python -m modules.tiktok_studio.scripts.import_script_template [txt 路径]
 
 txt 格式：开头是「模板ID / 模板名称 / 适合类目 / 适合时长」，随后「脚本内容:」之后直到
 结尾「状态 / 版本 / 参考视频」之前的全部内容为脚本正文。键值分隔符中英文冒号均可。
@@ -12,8 +12,8 @@ import re
 import sys
 from pathlib import Path
 
-from modules.tiktok import service
-from modules.tiktok.schemas import ScriptTemplateFields
+from modules.tiktok_studio import service
+from modules.tiktok_studio.schemas import ScriptTemplateFields
 from platforms.db import dispose_engine, session_scope
 
 DEFAULT_PATH = Path(__file__).resolve().parents[4] / "docs" / "服装开袋试穿脚本模板.txt"

@@ -1,6 +1,9 @@
 import pytest
 
-from modules.tiktok.scripts.import_script_template import DEFAULT_PATH, parse_template
+from modules.tiktok_studio.scripts.import_script_template import (
+    DEFAULT_PATH,
+    parse_template,
+)
 
 
 def test_parses_bundled_template():

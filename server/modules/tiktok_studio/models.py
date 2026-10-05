@@ -1,4 +1,4 @@
-"""模块的表全部建在自己的 schema（mod_tiktok）下，不允许出现指向其他模块 schema 的外键。"""
+"""模块的表全部建在自己的 schema（mod_tiktok_studio）下，不允许出现指向其他模块 schema 的外键。"""
 
 from datetime import datetime
 
@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from platforms.auth.models import AppUser
 from platforms.db import Base, module_schema
 
-SCHEMA = module_schema("tiktok")
+SCHEMA = module_schema("tiktok_studio")
 
 
 class ScriptTemplate(Base):
