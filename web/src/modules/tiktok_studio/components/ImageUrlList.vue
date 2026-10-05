@@ -9,7 +9,7 @@ const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif'
 
 /**
  * 已有图片只能保留或移除；新增的占位卡片通过 upload 上传，未传 upload（商品尚未保存）时不能上传。
- * 传了 options 时图片只能从中选择，每张卡片都可以编辑改选，不支持上传。
+ * 传了 options 时图片只是对候选图的引用，只能编辑改选，不支持上传和移除。
  */
 const images = defineModel<StoredObject[]>({ required: true })
 const props = withDefaults(
@@ -134,6 +134,7 @@ async function remove(index: number): Promise<void> {
           {{ uploadingTarget === image ? '上传中...' : '上传' }}
         </button>
         <button
+          v-if="!options"
           type="button"
           class="btn-link danger"
           :disabled="uploadingTarget === image"
