@@ -75,7 +75,7 @@ async def run_job(job_dir: Path, deps: tools.ToolDeps, storage) -> dict:
                 (out_dir / f"reference_{role}.jpg").write_bytes(response.content)
         if gen.success:
             (out_dir / "prompt.txt").write_text(gen.output["prompt"], encoding="utf-8")
-            response = await http.get(gen.output["image_url"])
+            response = await http.get(gen.output["image"]["url"])
             response.raise_for_status()
             (out_dir / "three_view.png").write_bytes(response.content)
     for original in (SAMPLE_ROOT / "output" / job_id).glob("*.png"):
@@ -98,9 +98,9 @@ async def main() -> int:
             out_dir = OUTPUT_ROOT / summary["job_id"]
             (out_dir / "result.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
             gen = summary.get("three_view_gen") or {}
-            failed += "image_key" not in gen
+            failed += "image" not in gen
             print(f"RESULT {summary['job_id']}: {gen.get('workflow')} {gen.get('template')} "
-                  f"{gen.get('error_code') or gen.get('image_url') or summary.get('view_select')}")
+                  f"{gen.get('error_code') or (gen.get('image') or {}).get('url') or summary.get('view_select')}")
     finally:
         await llm.aclose()
     return 1 if failed else 0

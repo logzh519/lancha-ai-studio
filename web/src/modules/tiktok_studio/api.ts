@@ -59,10 +59,20 @@ export interface ProductMasterFields {
   category: string | null
   description: string | null
   selling_points: string | null
-  main_image_url: string | null
-  sub_images: string[]
-  three_view_images: string[]
-  three_view_reference_images: string[]
+  main_image: StoredObject | null
+  sub_images: StoredObject[]
+  three_view_images: StoredObject[]
+  three_view_reference_images: StoredObject[]
+}
+
+/** 外部链接：没有对象存储 key，删除商品时不清理 */
+export const EXTERNAL = 'external'
+
+/** 图片资源；type 为存储类型（tos / obs）时 key 指向对象存储 */
+export interface StoredObject {
+  key: string | null
+  url: string | null
+  type: string
 }
 
 export type ImportStatus = 'pending' | 'running' | 'done' | 'failed'
@@ -74,15 +84,28 @@ export const IMPORT_STATUS_LABELS: Record<ImportStatus, string> = {
   failed: '失败',
 }
 
+export type ImportStage = 'crawl' | 'view' | 'gen'
+
+/** 导入阶段失败的现场；该阶段成功后移除 */
+export interface StageTrace {
+  input: Record<string, unknown>
+  output: Record<string, unknown>
+  error_code: string | null
+  error_message: string
+}
+
 export type ProductMasterSummary = Pick<
   ProductMasterFields,
-  'sku' | 'asin' | 'color' | 'store' | 'pid' | 'category' | 'main_image_url'
+  'sku' | 'asin' | 'color' | 'store' | 'pid' | 'category' | 'main_image'
 > & {
   id: number
   crawl_status: ImportStatus | null
   crawl_error: string | null
   view_status: ImportStatus | null
   view_error: string | null
+  gen_status: ImportStatus | null
+  gen_error: string | null
+  import_trace: Partial<Record<ImportStage, StageTrace>>
   created_by: number | null
   created_at: string
   updated_at: string

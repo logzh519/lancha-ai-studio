@@ -9,7 +9,6 @@ import base64
 import io
 import json
 import re
-import uuid
 from pathlib import Path
 from typing import Any, Literal
 
@@ -20,6 +19,7 @@ from pydantic import BaseModel, Field, HttpUrl, model_validator
 from modules.tiktok_studio.tools import three_view_prompts as prompts
 from platforms.llm import AsyncLLMClient, LLMError
 from platforms.storage import ObjectStorage
+from platforms.tools.amazon_crawler_tool import STORAGE_PREFIX as AMAZON_STORAGE_PREFIX
 from platforms.tools.base import Tool, ToolError, ToolSettings, logger, retry_async
 
 ASSET_DIR = Path(__file__).with_name("three_view_assets")
@@ -32,7 +32,8 @@ IMAGE_QUALITY = "medium"
 PRODUCT_ONLY_SIZE = "1536x1024"
 CLASSIFY_THRESHOLD = 0.78
 DETAIL_THRESHOLD = 0.85
-STORAGE_PREFIX = "three_view"
+# 与抓取到的主图副图放在同一目录；重新生成时覆盖同一个对象
+STORAGE_NAME = "THREE_VIEW.png"
 
 Category = Literal["upper", "bottom", "set", "one_piece"]
 SideKind = Literal["true_side", "front_three_quarter", "back_three_quarter", "none"]
@@ -73,6 +74,12 @@ class DetailLock(BaseModel):
     error: str | None = None    # 识别失败时不阻断生图，只记下原因
 
 
+class StoredImage(BaseModel):
+    key: str
+    url: str | None     # 存储 ACL 为 private 时为 None
+    type: str           # 存储类型（tos / obs）
+
+
 class ThreeViewGenOutput(BaseModel):
     generation_type: Category
     workflow: Literal["dummy_tryon", "product_only"]
@@ -81,8 +88,7 @@ class ThreeViewGenOutput(BaseModel):
     prompt: str
     classification: Classification | None
     detail_lock: DetailLock | None
-    image_key: str
-    image_url: str | None
+    image: StoredImage
 
 
 def _clamp(value: Any) -> float:
@@ -234,11 +240,12 @@ class ThreeViewGenTool(Tool[ThreeViewGenInput, ThreeViewGenOutput]):
             files.insert(0, _image_file("template", template_image))
 
         image = await self._generate(prompt, size, files, settings)
-        key = f"{STORAGE_PREFIX}/{payload.asin.upper()}/{uuid.uuid4().hex}.png"
+        key = f"{AMAZON_STORAGE_PREFIX}/{payload.asin.upper()}/{STORAGE_NAME}"
         record = await asyncio.to_thread(self._storage.upload, key, image)
         return ThreeViewGenOutput(
             generation_type=category, workflow=workflow, template=template, size=size, prompt=prompt,
-            classification=classification, detail_lock=detail_lock, image_key=key, image_url=record.url,
+            classification=classification, detail_lock=detail_lock,
+            image=StoredImage(key=key, url=record.url, type=self._storage.type),
         )
 
     async def _classify(self, facts: dict[str, str], front: bytes, settings: ToolSettings) -> Classification:

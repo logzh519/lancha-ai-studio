@@ -1,14 +1,66 @@
-"""业务逻辑层：事务边界在调用方（get_session 依赖），这里只管业务。"""
+"""业务逻辑层：事务边界在调用方（get_session 依赖），这里只管业务。
 
+商品图片引用对象存储里的对象，每个商品（ASIN）独占一套资源。改动图片字段的函数返回该商品不再引用的对象，
+调用方提交事务后再用 purge_objects 删除，避免事务回滚时对象已被删掉。
+"""
+
+import asyncio
+import logging
 from dataclasses import dataclass
 
 from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from modules.tiktok_studio.models import SCHEMA, ProductMaster, ScriptTemplate
-from modules.tiktok_studio.schemas import ProductMasterFields, ScriptTemplateFields
+from modules.tiktok_studio.schemas import (
+    EXTERNAL,
+    ProductMasterFields,
+    ScriptTemplateFields,
+)
+from platforms.storage import get_storage
 
 ERROR_MAX_LENGTH = 2000
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, order=True)
+class StoredRef:
+    """对象存储中的一个对象。"""
+
+    type: str
+    key: str
+
+
+class UnknownStoredObject(ValueError):
+    """客户端提交了商品原本没有的存储对象；只允许保留或移除已有对象、新增外部链接。"""
+
+
+def _stored_refs(images: list[dict | None]) -> set[StoredRef]:
+    return {
+        StoredRef(image["type"], image["key"])
+        for image in images
+        if image and image.get("type") != EXTERNAL and image.get("key")
+    }
+
+
+def _product_refs(product: ProductMaster) -> set[StoredRef]:
+    return _stored_refs([
+        product.main_image, *product.sub_images, *product.three_view_images, *product.three_view_reference_images,
+    ])
+
+
+def _fields_refs(fields: ProductMasterFields) -> set[StoredRef]:
+    images = [fields.main_image, *fields.sub_images, *fields.three_view_images, *fields.three_view_reference_images]
+    return _stored_refs([image.model_dump() if image else None for image in images])
+
+
+async def purge_objects(refs: list[StoredRef]) -> None:
+    """删除存储对象，须在事务提交后调用。删除失败只记日志：残留对象不影响业务数据。"""
+    for ref in refs:
+        try:
+            await asyncio.to_thread(get_storage(ref.type).delete_file, ref.key)
+        except Exception:
+            logger.exception("删除存储对象失败 %s:%s", ref.type, ref.key)
 
 
 def _like_pattern(keyword: str) -> str:
@@ -86,9 +138,16 @@ async def get_product_master(session: AsyncSession, product_id: int) -> ProductM
     return await session.get(ProductMaster, product_id)
 
 
+def _check_known_objects(fields: ProductMasterFields, known: set[StoredRef]) -> None:
+    unknown = _fields_refs(fields) - known
+    if unknown:
+        raise UnknownStoredObject(f"不能引用商品原本没有的存储对象：{', '.join(r.key for r in sorted(unknown))}")
+
+
 async def create_product_master(
     session: AsyncSession, fields: ProductMasterFields, created_by: int | None
 ) -> ProductMaster:
+    _check_known_objects(fields, set())
     product = ProductMaster(created_by=created_by, **fields.model_dump())
     session.add(product)
     await session.flush()
@@ -98,17 +157,23 @@ async def create_product_master(
 
 async def update_product_master(
     session: AsyncSession, product: ProductMaster, fields: ProductMasterFields
-) -> ProductMaster:
+) -> tuple[ProductMaster, list[StoredRef]]:
+    """返回更新后的商品与需要删除的存储对象。"""
+    before = _product_refs(product)
+    _check_known_objects(fields, before)
     for key, value in fields.model_dump().items():
         setattr(product, key, value)
     await session.flush()
     await session.refresh(product)
-    return product
+    return product, sorted(before - _product_refs(product))
 
 
-async def delete_product_master(session: AsyncSession, product: ProductMaster) -> None:
+async def delete_product_master(session: AsyncSession, product: ProductMaster) -> list[StoredRef]:
+    """返回需要删除的存储对象。"""
+    refs = _product_refs(product)
     await session.delete(product)
     await session.flush()
+    return sorted(refs)
 
 
 async def existing_product_keys(session: AsyncSession, skus: list[str]) -> set[tuple[str, str | None]]:
@@ -120,7 +185,7 @@ async def existing_product_keys(session: AsyncSession, skus: list[str]) -> set[t
 async def create_imported_products(
     session: AsyncSession, records: list[dict], created_by: int | None
 ) -> list[ProductMaster]:
-    """按 product_lookup 的 SKU 记录建商品，两个后台阶段都置为 pending 等 worker 处理。"""
+    """按 product_lookup 的 SKU 记录建商品，三个后台阶段都置为 pending 等 worker 处理。"""
     products = [
         ProductMaster(
             sku=record["sku"],
@@ -131,6 +196,7 @@ async def create_imported_products(
             category=record["category"],
             crawl_status="pending",
             view_status="pending",
+            gen_status="pending",
             created_by=created_by,
         )
         for record in records
@@ -143,12 +209,16 @@ async def create_imported_products(
 
 
 async def retry_product_import(session: AsyncSession, product: ProductMaster) -> bool:
-    """把失败的阶段重置为 pending；抓取失败时三视图也要重做。没有失败阶段返回 False。"""
+    """把失败的阶段及其下游阶段重置为 pending。没有失败阶段返回 False。"""
     if product.crawl_status == "failed":
         product.crawl_status, product.crawl_error = "pending", None
         product.view_status, product.view_error = "pending", None
+        product.gen_status, product.gen_error = "pending", None
     elif product.view_status == "failed":
         product.view_status, product.view_error = "pending", None
+        product.gen_status, product.gen_error = "pending", None
+    elif product.gen_status == "failed":
+        product.gen_status, product.gen_error = "pending", None
     else:
         return False
     await session.flush()
@@ -170,6 +240,18 @@ class ViewJob:
     description: str | None
 
 
+@dataclass(frozen=True)
+class GenJob:
+    product_id: int
+    asin: str | None
+    sku: str
+    color: str | None
+    reference_images: list[str]     # 正面、侧面（可能缺失）、背面
+    side_kind: str
+    bullet_points: list[str]
+    description: str | None
+
+
 async def reset_running_crawls(session: AsyncSession) -> None:
     """抓取循环是单例，启动时残留的 running 只可能来自上次中断，退回 pending 重做。"""
     stmt = update(ProductMaster).where(ProductMaster.crawl_status == "running").values(crawl_status="pending")
@@ -178,6 +260,11 @@ async def reset_running_crawls(session: AsyncSession) -> None:
 
 async def reset_running_views(session: AsyncSession) -> None:
     stmt = update(ProductMaster).where(ProductMaster.view_status == "running").values(view_status="pending")
+    await session.execute(stmt)
+
+
+async def reset_running_gens(session: AsyncSession) -> None:
+    stmt = update(ProductMaster).where(ProductMaster.gen_status == "running").values(gen_status="pending")
     await session.execute(stmt)
 
 
@@ -210,7 +297,7 @@ async def claim_view_jobs(session: AsyncSession, limit: int) -> list[ViewJob]:
     return [
         ViewJob(
             product.id,
-            [url for url in (product.main_image_url, *product.sub_images) if url],
+            [image["url"] for image in (product.main_image, *product.sub_images) if image and image.get("url")],
             (product.selling_points or "").splitlines(),
             product.description,
         )
@@ -218,45 +305,136 @@ async def claim_view_jobs(session: AsyncSession, limit: int) -> list[ViewJob]:
     ]
 
 
-async def complete_crawl(session: AsyncSession, product_id: int, output: dict) -> None:
-    """output 为 amazon_crawler 的输出；商品已被删除时忽略。"""
+async def claim_gen_jobs(session: AsyncSession, limit: int) -> list[GenJob]:
+    """三视图生成依赖识别出的参考图，只领取参考图已完成的商品。"""
+    stmt = (
+        select(ProductMaster)
+        .where(ProductMaster.gen_status == "pending", ProductMaster.view_status == "done")
+        .order_by(ProductMaster.id)
+        .limit(limit)
+    )
+    products = list((await session.execute(stmt)).scalars())
+    for product in products:
+        product.gen_status = "running"
+    await session.flush()
+    return [
+        GenJob(
+            product.id,
+            product.asin,
+            product.sku,
+            product.color,
+            [image["url"] for image in product.three_view_reference_images if image.get("url")],
+            product.three_view_side_kind or "none",
+            (product.selling_points or "").splitlines(),
+            product.description,
+        )
+        for product in products
+    ]
+
+
+def _set_trace(product: ProductMaster, stage: str, trace: dict | None) -> None:
+    """JSONB 字段原地修改不会被 ORM 感知，整体替换。"""
+    traces = {key: value for key, value in product.import_trace.items() if key != stage}
+    if trace is not None:
+        traces[stage] = trace
+    product.import_trace = traces
+
+
+def _stored_object(image: dict) -> dict:
+    return {"key": image["key"], "url": image["url"], "type": image["type"]}
+
+
+async def _apply_images(session: AsyncSession, product: ProductMaster | None, uploaded: list[dict], apply) -> list[StoredRef]:
+    """写入新图片并返回需要删除的对象；商品已被删除时，本次新上传的对象也无人引用。"""
+    if product is None:
+        return sorted(_stored_refs(uploaded))
+    before = _product_refs(product)
+    apply(product)
+    await session.flush()
+    return sorted(before - _product_refs(product))
+
+
+async def complete_crawl(session: AsyncSession, product_id: int, output: dict) -> list[StoredRef]:
+    """output 为 amazon_crawler 的输出。"""
+    main_image = _stored_object(output["main_image"]) if output["main_image"] else None
+    sub_images = [_stored_object(image) for image in output["gallery_images"]]
+
+    def apply(product: ProductMaster) -> None:
+        product.description = output["description"]
+        product.selling_points = "\n".join(output["bullet_points"]) or None
+        product.main_image, product.sub_images = main_image, sub_images
+        product.crawl_status, product.crawl_error = "done", None
+        _set_trace(product, "crawl", None)
+
+    product = await session.get(ProductMaster, product_id)
+    return await _apply_images(session, product, [main_image, *sub_images], apply)
+
+
+async def complete_view(session: AsyncSession, product_id: int, output: dict) -> list[StoredRef]:
+    """output 为 view_select 的输出，按正面、侧面、背面的顺序写入三视图参考图；侧面可能缺失。
+
+    参考图都选自主图副图，沿用其存储对象，不另存副本。
+    """
+    def apply(product: ProductMaster) -> None:
+        by_url = {image["url"]: image for image in (product.main_image, *product.sub_images) if image and image.get("url")}
+        views = (output["front_url"], output["side_url"], output["back_url"])
+        product.three_view_reference_images = [
+            by_url.get(url) or {"key": None, "url": url, "type": EXTERNAL} for url in views if url
+        ]
+        product.three_view_side_kind = output["side_kind"]
+        product.view_status, product.view_error = "done", None
+        _set_trace(product, "view", None)
+
+    product = await session.get(ProductMaster, product_id)
+    return await _apply_images(session, product, [], apply)
+
+
+async def complete_gen(session: AsyncSession, product_id: int, output: dict) -> list[StoredRef]:
+    """output 为 three_view_gen 的输出，生成的是一张三联图，写入三视图字段；重新生成时旧图会被清理。"""
+    image = _stored_object(output["image"])
+
+    def apply(product: ProductMaster) -> None:
+        product.three_view_images = [image]
+        product.gen_status, product.gen_error = "done", None
+        _set_trace(product, "gen", None)
+
+    product = await session.get(ProductMaster, product_id)
+    return await _apply_images(session, product, [image], apply)
+
+
+@dataclass(frozen=True)
+class StageFailure:
+    """阶段失败的现场，input 为调用 Tool 的参数，output 为 Tool 返回的输出（失败时通常为空）。"""
+
+    message: str
+    input: dict
+    output: dict | None = None
+    error_code: str | None = None
+
+
+async def _fail(session: AsyncSession, product_id: int, stage: str, failure: StageFailure) -> None:
     product = await session.get(ProductMaster, product_id)
     if product is None:
         return
-    main_image = output["main_image"] or {}
-    product.description = output["description"]
-    product.selling_points = "\n".join(output["bullet_points"]) or None
-    product.main_image_url = main_image.get("url")
-    product.sub_images = [image["url"] for image in output["gallery_images"] if image["url"]]
-    product.crawl_status, product.crawl_error = "done", None
+    message = failure.message[:ERROR_MAX_LENGTH]
+    setattr(product, f"{stage}_status", "failed")
+    setattr(product, f"{stage}_error", message)
+    _set_trace(product, stage, {
+        "input": failure.input, "output": failure.output or {}, "error_code": failure.error_code, "error_message": message,
+    })
     await session.flush()
 
 
-async def complete_view(session: AsyncSession, product_id: int, output: dict) -> None:
-    """output 为 view_select 的输出，按正面、侧面、背面的顺序写入三视图参考图；侧面可能缺失。"""
-    product = await session.get(ProductMaster, product_id)
-    if product is None:
-        return
-    views = (output["front_url"], output["side_url"], output["back_url"])
-    product.three_view_reference_images = [url for url in views if url]
-    product.view_status, product.view_error = "done", None
-    await session.flush()
+async def fail_crawl(session: AsyncSession, product_id: int, failure: StageFailure) -> None:
+    await _fail(session, product_id, "crawl", failure)
 
 
-async def fail_crawl(session: AsyncSession, product_id: int, message: str) -> None:
-    product = await session.get(ProductMaster, product_id)
-    if product is None:
-        return
-    product.crawl_status, product.crawl_error = "failed", message[:ERROR_MAX_LENGTH]
-    await session.flush()
+async def fail_view(session: AsyncSession, product_id: int, failure: StageFailure) -> None:
+    await _fail(session, product_id, "view", failure)
 
 
-async def fail_view(session: AsyncSession, product_id: int, message: str) -> None:
-    product = await session.get(ProductMaster, product_id)
-    if product is None:
-        return
-    product.view_status, product.view_error = "failed", message[:ERROR_MAX_LENGTH]
-    await session.flush()
+async def fail_gen(session: AsyncSession, product_id: int, failure: StageFailure) -> None:
+    await _fail(session, product_id, "gen", failure)
 
 
 async def _sync_id_sequence(session: AsyncSession) -> None:

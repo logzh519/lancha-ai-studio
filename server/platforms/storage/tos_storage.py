@@ -63,6 +63,8 @@ def _int_or_none(value: object) -> int | None:
 class TosStorage(ObjectStorage):
     """提供对象上传、下载、删除和存在性检查。"""
 
+    type = "tos"
+
     def __init__(self, bucket: str | None = None, client: TosClientV2 | None = None):
         settings = get_settings()
         self._settings = settings

@@ -7,10 +7,12 @@ import {
   deleteProductMaster,
   IMPORT_STATUS_LABELS,
   importProductMasters,
+  type ImportStage,
   type ImportStatus,
   listProductMasters,
   type ProductMasterSummary,
   retryProductImport,
+  type StageTrace,
 } from '../api'
 
 const PAGE_SIZE = 20
@@ -18,6 +20,14 @@ const MAX_IMPORT_SKUS = 50
 const POLL_INTERVAL_MS = 5000
 const PREVIEW_DELAY_MS = 500
 const PREVIEW_MAX_HEIGHT = 492
+const TRACE_WIDTH = 480
+const TRACE_MAX_HEIGHT = 420
+const TRACE_HIDE_DELAY_MS = 150
+const IMPORT_STAGES: { key: ImportStage; label: string }[] = [
+  { key: 'crawl', label: '详情' },
+  { key: 'view', label: '识别三视图参考图' },
+  { key: 'gen', label: '生成三视图' },
+]
 
 const session = useSessionStore()
 
@@ -30,7 +40,7 @@ const keyword = ref('')
 const jumpInput = ref(1)
 const loading = ref(true)
 const initialLoaded = ref(false)
-const deletingId = ref<number | null>(null)
+const deletingIds = ref(new Set<number>())
 const retryingId = ref<number | null>(null)
 const importOpen = ref(false)
 const importInput = ref('')
@@ -56,6 +66,53 @@ function hidePreview(): void {
   preview.value = null
 }
 
+interface TracePopover {
+  label: string
+  /** 旧数据没有现场记录时只有错误信息 */
+  trace: StageTrace | null
+  error: string
+  top: number
+  left: number
+}
+
+const tracePopover = ref<TracePopover | null>(null)
+let traceTimer: ReturnType<typeof setTimeout> | undefined
+
+function stageStatus(product: ProductMasterSummary, stage: ImportStage): ImportStatus | null {
+  return product[`${stage}_status`]
+}
+
+function showTrace(event: MouseEvent, product: ProductMasterSummary, stage: ImportStage, label: string): void {
+  clearTimeout(traceTimer)
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const below = rect.bottom + 6
+  tracePopover.value = {
+    label,
+    trace: product.import_trace[stage] ?? null,
+    error: product[`${stage}_error`] ?? '',
+    top: below + TRACE_MAX_HEIGHT <= window.innerHeight - 8 ? below : Math.max(8, rect.top - 6 - TRACE_MAX_HEIGHT),
+    left: Math.max(8, Math.min(rect.left, window.innerWidth - TRACE_WIDTH - 8)),
+  }
+}
+
+function keepTrace(): void {
+  clearTimeout(traceTimer)
+}
+
+function hideTrace(delay = TRACE_HIDE_DELAY_MS): void {
+  clearTimeout(traceTimer)
+  traceTimer = setTimeout(() => (tracePopover.value = null), delay)
+}
+
+function formatJson(value: Record<string, unknown>): string {
+  return Object.keys(value).length ? JSON.stringify(value, null, 2) : '无'
+}
+
+function onTableScroll(): void {
+  hidePreview()
+  hideTrace(0)
+}
+
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
 
 const importSkus = computed(() => [
@@ -72,11 +129,13 @@ function statusLabel(status: ImportStatus | null): string {
 }
 
 function isImportBusy(product: ProductMasterSummary): boolean {
-  return [product.crawl_status, product.view_status].some((s) => s === 'pending' || s === 'running')
+  return [product.crawl_status, product.view_status, product.gen_status].some(
+    (s) => s === 'pending' || s === 'running',
+  )
 }
 
 function hasImportFailure(product: ProductMasterSummary): boolean {
-  return product.crawl_status === 'failed' || product.view_status === 'failed'
+  return [product.crawl_status, product.view_status, product.gen_status].includes('failed')
 }
 
 function schedulePoll(): void {
@@ -174,7 +233,7 @@ async function load(target: number): Promise<void> {
 }
 
 async function remove(product: ProductMasterSummary): Promise<void> {
-  if (!isOwner(product) || deletingId.value !== null) return
+  if (!isOwner(product) || deletingIds.value.has(product.id)) return
   const confirmed = await confirmDialog({
     title: '确认删除商品',
     message: `确定删除商品「${product.sku}」？删除后将无法恢复。`,
@@ -183,7 +242,7 @@ async function remove(product: ProductMasterSummary): Promise<void> {
     cancelText: '取消',
   })
   if (!confirmed) return
-  deletingId.value = product.id
+  deletingIds.value.add(product.id)
   try {
     await deleteProductMaster(product.id)
     products.value = products.value.filter((item) => item.id !== product.id)
@@ -192,7 +251,7 @@ async function remove(product: ProductMasterSummary): Promise<void> {
   } catch (e) {
     error.value = (e as Error).message
   } finally {
-    deletingId.value = null
+    deletingIds.value.delete(product.id)
   }
 }
 
@@ -200,6 +259,7 @@ onMounted(() => load(1))
 onUnmounted(() => {
   clearTimeout(pollTimer)
   clearTimeout(previewTimer)
+  clearTimeout(traceTimer)
 })
 </script>
 
@@ -281,7 +341,7 @@ onUnmounted(() => {
 
     <!-- 表格卡片容器 -->
     <div class="table-card">
-      <div class="table-scroll" @scroll="hidePreview">
+      <div class="table-scroll" @scroll="onTableScroll">
         <table class="data-table">
           <thead>
             <tr>
@@ -311,15 +371,15 @@ onUnmounted(() => {
               <td class="text-center font-mono text-weak">#{{ product.id }}</td>
               <td class="text-center">
                 <a
-                  v-if="product.main_image_url"
-                  :href="product.main_image_url"
+                  v-if="product.main_image?.url"
+                  :href="product.main_image.url"
                   target="_blank"
                   rel="noopener"
                   class="thumb"
-                  @mouseenter="schedulePreview($event, product.main_image_url)"
+                  @mouseenter="schedulePreview($event, product.main_image.url)"
                   @mouseleave="hidePreview"
                 >
-                  <img :src="product.main_image_url" alt="" />
+                  <img :src="product.main_image.url" alt="" />
                 </a>
                 <span v-else class="text-weak">—</span>
               </td>
@@ -334,21 +394,19 @@ onUnmounted(() => {
               <td class="text-center font-mono">{{ product.pid || '—' }}</td>
               <td class="text-center">{{ product.category || '—' }}</td>
               <td class="text-center">
-                <div v-if="product.crawl_status" class="import-status">
-                  <span
-                    class="status-tag"
-                    :class="`is-${product.crawl_status}`"
-                    :title="product.crawl_error || ''"
-                  >
-                    详情 · {{ statusLabel(product.crawl_status) }}
-                  </span>
-                  <span
-                    class="status-tag"
-                    :class="`is-${product.view_status}`"
-                    :title="product.view_error || ''"
-                  >
-                    三视图 · {{ statusLabel(product.view_status) }}
-                  </span>
+                <div v-if="product.crawl_status" class="import-steps">
+                  <template v-for="(stage, index) in IMPORT_STAGES" :key="stage.key">
+                    <span v-if="index > 0" class="step-arrow">→</span>
+                    <span
+                      class="status-tag"
+                      :class="`is-${stageStatus(product, stage.key) ?? 'none'}`"
+                      :title="stageStatus(product, stage.key) === 'failed' ? undefined : statusLabel(stageStatus(product, stage.key))"
+                      @mouseenter="stageStatus(product, stage.key) === 'failed' && showTrace($event, product, stage.key, stage.label)"
+                      @mouseleave="hideTrace()"
+                    >
+                      {{ stage.label }}
+                    </span>
+                  </template>
                 </div>
                 <span v-else class="text-weak">—</span>
               </td>
@@ -368,24 +426,24 @@ onUnmounted(() => {
                   <RouterLink
                     :to="`/tiktok_studio/product-masters/${product.id}`"
                     class="action-link"
-                    :class="{ disabled: deletingId !== null }"
+                    :class="{ disabled: deletingIds.has(product.id) }"
                   >
                     编辑
                   </RouterLink>
                   <button
                     type="button"
                     class="action-link danger"
-                    :disabled="deletingId !== null"
+                    :disabled="deletingIds.has(product.id)"
                     @click="remove(product)"
                   >
-                    {{ deletingId === product.id ? '删除中...' : '删除' }}
+                    {{ deletingIds.has(product.id) ? '删除中...' : '删除' }}
                   </button>
                 </template>
                 <template v-else>
                   <RouterLink
                     :to="`/tiktok_studio/product-masters/${product.id}`"
                     class="action-link"
-                    :class="{ disabled: deletingId !== null }"
+                    :class="{ disabled: deletingIds.has(product.id) }"
                   >
                     查看
                   </RouterLink>
@@ -456,6 +514,28 @@ onUnmounted(() => {
         :style="{ top: `${preview.top}px`, left: `${preview.left}px` }"
       >
         <img :src="preview.url" alt="" />
+      </div>
+      <div
+        v-if="tracePopover"
+        class="trace-popover"
+        :style="{ top: `${tracePopover.top}px`, left: `${tracePopover.left}px`, width: `${TRACE_WIDTH}px`, maxHeight: `${TRACE_MAX_HEIGHT}px` }"
+        @mouseenter="keepTrace"
+        @mouseleave="hideTrace()"
+      >
+        <div class="trace-title">{{ tracePopover.label }} · 失败</div>
+        <dl class="trace-body">
+          <dt>错误信息</dt>
+          <dd class="trace-error">
+            <span v-if="tracePopover.trace?.error_code" class="trace-code">{{ tracePopover.trace.error_code }}</span>
+            {{ tracePopover.trace?.error_message ?? (tracePopover.error || '无') }}
+          </dd>
+          <template v-if="tracePopover.trace">
+            <dt>输入</dt>
+            <dd><pre>{{ formatJson(tracePopover.trace.input) }}</pre></dd>
+            <dt>输出</dt>
+            <dd><pre>{{ formatJson(tracePopover.trace.output) }}</pre></dd>
+          </template>
+        </dl>
       </div>
     </Teleport>
 
@@ -1026,11 +1106,16 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
-.import-status {
+.import-steps {
   display: inline-flex;
-  flex-direction: column;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
+}
+
+.step-arrow {
+  color: var(--color-text-weak);
+  font-size: 11px;
 }
 
 .status-tag {
@@ -1062,6 +1147,69 @@ onUnmounted(() => {
   border-color: #fecaca;
   color: var(--color-danger-text);
   cursor: help;
+}
+
+.trace-popover {
+  position: fixed;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
+  font-size: 12px;
+}
+
+.trace-title {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  background: var(--color-danger-light);
+  color: var(--color-danger-text);
+  font-weight: 600;
+}
+
+.trace-body {
+  margin: 0;
+  padding: 8px 12px 12px;
+  overflow: auto;
+}
+
+.trace-body dt {
+  margin-top: 8px;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.trace-body dd {
+  margin: 4px 0 0;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.trace-body pre {
+  margin: 0;
+  padding: 8px;
+  background: var(--color-surface-subtle);
+  border-radius: var(--radius-sm);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.trace-error {
+  color: var(--color-danger-text) !important;
+}
+
+.trace-code {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  background: var(--color-danger-light);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .import-form {

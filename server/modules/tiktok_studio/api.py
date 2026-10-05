@@ -18,6 +18,7 @@ from modules.tiktok_studio.schemas import (
     ProductMasterFields,
     ScriptTemplateFields,
     Status,
+    StoredObject,
 )
 from platforms.auth.dependencies import require
 from platforms.auth.principal import Principal
@@ -115,6 +116,15 @@ async def delete_script_template(template_id: int, session: AsyncSession = Depen
     await session.commit()
 
 
+class StageTrace(BaseModel):
+    """导入阶段失败的现场，键为 crawl / view / gen。"""
+
+    input: dict
+    output: dict
+    error_code: str | None
+    error_message: str
+
+
 class ProductMasterSummary(BaseModel):
     id: int
     sku: str
@@ -123,11 +133,14 @@ class ProductMasterSummary(BaseModel):
     store: str | None
     pid: str | None
     category: str | None
-    main_image_url: str | None
+    main_image: StoredObject | None
     crawl_status: ImportStatus | None
     crawl_error: str | None
     view_status: ImportStatus | None
     view_error: str | None
+    gen_status: ImportStatus | None
+    gen_error: str | None
+    import_trace: dict[str, StageTrace]
     created_by: int | None
     created_at: datetime
     updated_at: datetime
@@ -141,9 +154,9 @@ class ProductMasterPage(BaseModel):
 class ProductMasterOut(ProductMasterSummary):
     description: str | None
     selling_points: str | None
-    sub_images: list[str]
-    three_view_images: list[str]
-    three_view_reference_images: list[str]
+    sub_images: list[StoredObject]
+    three_view_images: list[StoredObject]
+    three_view_reference_images: list[StoredObject]
 
 
 class ProductImportRequest(BaseModel):
@@ -200,7 +213,10 @@ async def create_product_master(
     principal: Principal = Depends(require("tiktok_studio:product_master:create")),
     session: AsyncSession = Depends(get_session),
 ):
-    product = await service.create_product_master(session, payload, created_by=principal.user_id)
+    try:
+        product = await service.create_product_master(session, payload, created_by=principal.user_id)
+    except service.UnknownStoredObject as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     await session.commit()
     return ProductMasterOut.model_validate(product, from_attributes=True)
 
@@ -244,8 +260,14 @@ async def retry_product_import(product_id: int, session: AsyncSession = Depends(
 async def update_product_master(
     product_id: int, payload: ProductMasterFields, session: AsyncSession = Depends(get_session)
 ):
-    product = await service.update_product_master(session, await _get_product_or_404(session, product_id), payload)
+    try:
+        product, orphans = await service.update_product_master(
+            session, await _get_product_or_404(session, product_id), payload,
+        )
+    except service.UnknownStoredObject as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     await session.commit()
+    await service.purge_objects(orphans)
     return ProductMasterOut.model_validate(product, from_attributes=True)
 
 
@@ -255,5 +277,6 @@ async def update_product_master(
     dependencies=[Depends(require("tiktok_studio:product_master:delete"))],
 )
 async def delete_product_master(product_id: int, session: AsyncSession = Depends(get_session)):
-    await service.delete_product_master(session, await _get_product_or_404(session, product_id))
+    orphans = await service.delete_product_master(session, await _get_product_or_404(session, product_id))
     await session.commit()
+    await service.purge_objects(orphans)

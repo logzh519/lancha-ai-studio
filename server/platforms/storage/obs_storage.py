@@ -82,6 +82,8 @@ def _check(action: str, response: object) -> object:
 class ObsStorage(ObjectStorage):
     """提供对象上传、下载、删除和存在性检查。"""
 
+    type = "obs"
+
     def __init__(self, bucket: str | None = None, client: ObsClient | None = None):
         settings = get_settings()
         self._settings = settings

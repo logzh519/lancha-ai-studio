@@ -42,6 +42,7 @@ class ProductImage(BaseModel):
     source_url: str             # Amazon 原图地址
     key: str                    # 对象存储 key
     url: str | None             # 对象存储公开地址；存储 ACL 为 private 时为 None
+    type: str                   # 存储类型（tos / obs），删除对象时据此选择存储
 
 
 class AmazonCrawlerOutput(BaseModel):
@@ -130,7 +131,7 @@ class AmazonCrawlerTool(Tool[AmazonCrawlerInput, AmazonCrawlerOutput]):
         suffix = PurePosixPath(urlparse(image.url).path).suffix or ".jpg"
         key = f"{STORAGE_PREFIX}/{asin}/{index:02d}_{image.variant or 'IMG'}{suffix}"
         record = await asyncio.to_thread(self._storage.upload, key, content)
-        return ProductImage(variant=image.variant, source_url=image.url, key=key, url=record.url)
+        return ProductImage(variant=image.variant, source_url=image.url, key=key, url=record.url, type=self._storage.type)
 
 
 def _is_retryable(exc: Exception) -> bool:

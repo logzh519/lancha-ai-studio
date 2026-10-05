@@ -7,10 +7,7 @@ from platforms.storage.object_storage import ObjectStorage
 from platforms.storage.obs_storage import ObsStorage
 from platforms.storage.tos_storage import TosStorage
 
-_PROVIDERS: dict[str, type[ObjectStorage]] = {
-    "tos": TosStorage,
-    "obs": ObsStorage,
-}
+_PROVIDERS: dict[str, type[ObjectStorage]] = {cls.type: cls for cls in (TosStorage, ObsStorage)}
 
 
 def get_storage(provider: str | None = None) -> ObjectStorage:

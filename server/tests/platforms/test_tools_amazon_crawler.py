@@ -62,6 +62,8 @@ INTERSTITIAL_PAGE = "<html><body><h4>Click the button below to continue shopping
 
 
 class FakeStorage:
+    type = "tos"
+
     def __init__(self) -> None:
         self.uploaded: dict[str, bytes] = {}
 
@@ -134,6 +136,7 @@ async def test_scrape_returns_content_and_stores_images():
         "source_url": "https://m.media-amazon.com/images/I/main._AC_SL1500_.jpg",
         "key": "amazon/B0TEST0001/01_MAIN.jpg",
         "url": "https://cdn.test/amazon/B0TEST0001/01_MAIN.jpg",
+        "type": "tos",
     }
     assert [image["key"] for image in output["gallery_images"]] == ["amazon/B0TEST0001/02_PT01.jpg"]
     assert storage.uploaded == {

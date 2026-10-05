@@ -1,4 +1,4 @@
-"""按货号批量导入商品：同步查询 SKU 记录并入库，Amazon 抓取与三视图识别交给 worker 后台执行。"""
+"""按货号批量导入商品：同步查询 SKU 记录并入库，Amazon 抓取、参考图识别与三视图生成交给 worker 后台执行。"""
 
 import re
 from dataclasses import dataclass

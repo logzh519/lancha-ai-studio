@@ -74,6 +74,8 @@ class FakeLLM:
 
 
 class FakeStorage:
+    type = "tos"
+
     def __init__(self) -> None:
         self.uploaded: dict[str, bytes] = {}
 
@@ -135,9 +137,9 @@ async def test_auto_upper_uses_v3_dummy_template_and_uploads_result():
     assert "- cut the hem asymmetrically with a high-low shape" in output["prompt"]
     assert "template + 正面 + 背面 + 斜侧面（侧面证据）" in output["prompt"]
     assert "V3 TEMPLATE SCOPE LOCK" in output["prompt"]
-    assert storage.uploaded == {output["image_key"]: RESULT_PNG}
-    assert output["image_key"].startswith("three_view/B0H8Z65GJT/")
-    assert output["image_url"] == f"https://cdn.test/{output['image_key']}"
+    key = "amazon/B0H8Z65GJT/THREE_VIEW.png"
+    assert storage.uploaded == {key: RESULT_PNG}
+    assert output["image"] == {"key": key, "url": f"https://cdn.test/{key}", "type": "tos"}
 
     classify, detail = llm.chat_calls
     assert classify["temperature"] == 0 and classify["timeout"] == SETTINGS.timeout

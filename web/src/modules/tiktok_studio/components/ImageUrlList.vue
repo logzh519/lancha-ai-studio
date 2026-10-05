@@ -1,31 +1,36 @@
 <script setup lang="ts">
-const urls = defineModel<string[]>({ required: true })
+import { EXTERNAL, type StoredObject } from '../api'
+
+/** 对象存储里的图片只能保留或移除；手工添加的是外部链接，可编辑 */
+const images = defineModel<StoredObject[]>({ required: true })
 const props = defineProps<{ max?: number }>()
 
 function add(): void {
-  if (props.max !== undefined && urls.value.length >= props.max) return
-  urls.value = [...urls.value, '']
+  if (props.max !== undefined && images.value.length >= props.max) return
+  images.value = [...images.value, { key: null, url: '', type: EXTERNAL }]
 }
 
 function update(index: number, value: string): void {
-  urls.value = urls.value.map((url, i) => (i === index ? value : url))
+  images.value = images.value.map((image, i) => (i === index ? { key: null, url: value, type: EXTERNAL } : image))
 }
 
 function remove(index: number): void {
-  urls.value = urls.value.filter((_, i) => i !== index)
+  images.value = images.value.filter((_, i) => i !== index)
 }
 </script>
 
 <template>
   <div class="image-list">
-    <div v-for="(url, index) in urls" :key="index" class="image-row">
-      <a v-if="url" :href="url" target="_blank" rel="noopener" class="thumb">
-        <img :src="url" alt="" />
+    <div v-for="(image, index) in images" :key="index" class="image-row">
+      <a v-if="image.url" :href="image.url" target="_blank" rel="noopener" class="thumb">
+        <img :src="image.url" alt="" />
       </a>
       <span v-else class="thumb thumb-empty" />
       <input
-        :value="url"
-        type="url"
+        :value="image.url ?? image.key"
+        :type="image.type === EXTERNAL ? 'url' : 'text'"
+        :readonly="image.type !== EXTERNAL"
+        :title="image.type !== EXTERNAL ? `${image.type}: ${image.key}` : ''"
         required
         maxlength="2048"
         placeholder="https://..."
@@ -37,10 +42,10 @@ function remove(index: number): void {
     <button
       type="button"
       class="btn-add"
-      :disabled="max !== undefined && urls.length >= max"
+      :disabled="max !== undefined && images.length >= max"
       @click="add"
     >
-      + 添加图片{{ max !== undefined ? `（${urls.length}/${max}）` : '' }}
+      + 添加图片{{ max !== undefined ? `（${images.length}/${max}）` : '' }}
     </button>
   </div>
 </template>
@@ -92,7 +97,8 @@ function remove(index: number): void {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
-.image-input:disabled {
+.image-input:disabled,
+.image-input:read-only {
   background: var(--color-surface-subtle);
 }
 

@@ -3,7 +3,14 @@ import { useSessionStore } from '@shared/core'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { createProductMaster, getProductMaster, updateProductMaster, type ProductMasterFields } from '../api'
+import {
+  createProductMaster,
+  EXTERNAL,
+  getProductMaster,
+  updateProductMaster,
+  type ProductMasterFields,
+  type StoredObject,
+} from '../api'
 import ImageUrlList from '../components/ImageUrlList.vue'
 
 const route = useRoute()
@@ -29,7 +36,6 @@ const TEXT_FIELDS = [
   'category',
   'description',
   'selling_points',
-  'main_image_url',
 ] as const
 const IMAGE_FIELDS = ['sub_images', 'three_view_images', 'three_view_reference_images'] as const
 
@@ -42,12 +48,21 @@ const form = reactive<ProductMasterFields>({
   category: null,
   description: null,
   selling_points: null,
-  main_image_url: null,
+  main_image: null,
   sub_images: [],
   three_view_images: [],
   three_view_reference_images: [],
 })
+/** 主图用单元素列表编辑，复用 ImageUrlList */
+const mainImages = ref<StoredObject[]>([])
 const error = ref('')
+
+/** 外部链接去掉首尾空白，空链接丢弃；存储对象原样保留 */
+function cleanImages(images: StoredObject[]): StoredObject[] {
+  return images
+    .map((image) => (image.type === EXTERNAL ? { ...image, url: image.url?.trim() || null } : image))
+    .filter((image) => image.type !== EXTERNAL || image.url)
+}
 const saving = ref(false)
 
 onMounted(async () => {
@@ -58,6 +73,7 @@ onMounted(async () => {
     form.sku = data.sku
     for (const key of TEXT_FIELDS) form[key] = data[key]
     for (const key of IMAGE_FIELDS) form[key] = data[key]
+    mainImages.value = data.main_image ? [data.main_image] : []
   } catch (e) {
     error.value = (e as Error).message
   }
@@ -69,7 +85,8 @@ async function submit(): Promise<void> {
   try {
     const fields: ProductMasterFields = { ...form, sku: form.sku.trim() }
     for (const key of TEXT_FIELDS) fields[key] = form[key]?.trim() || null
-    for (const key of IMAGE_FIELDS) fields[key] = form[key].map((url) => url.trim()).filter(Boolean)
+    for (const key of IMAGE_FIELDS) fields[key] = cleanImages(form[key])
+    fields.main_image = cleanImages(mainImages.value)[0] ?? null
     if (productId.value === null) {
       await createProductMaster(fields)
     } else {
@@ -188,16 +205,10 @@ async function submit(): Promise<void> {
             </div>
           </div>
 
-          <div class="form-group inline col-span-2">
+          <div class="form-group inline col-span-2 align-start">
             <label class="form-label">主图</label>
             <div class="form-control-wrap">
-              <input
-                v-model="form.main_image_url"
-                type="url"
-                maxlength="2048"
-                placeholder="https://..."
-                class="form-control"
-              />
+              <ImageUrlList v-model="mainImages" :max="1" />
             </div>
           </div>
 
