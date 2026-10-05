@@ -12,6 +12,7 @@
 
 from collections.abc import Callable
 
+from modules.tiktok_studio.tools.amazon_scrape import AmazonScrapeTool
 from modules.tiktok_studio.tools.base import (
     Tool,
     ToolDeps,
@@ -20,11 +21,20 @@ from modules.tiktok_studio.tools.base import (
     ToolSettings,
 )
 from modules.tiktok_studio.tools.template_match import TemplateMatchTool
+from modules.tiktok_studio.tools.view_select import ViewSelectTool
+
+
+def _require[T](value: T | None, name: str) -> T:
+    if value is None:
+        raise ValueError(f"ToolDeps 缺少 {name}")
+    return value
 
 
 # 工具注册工厂：按名字构造，不 import 具体 Tool 类
 _FACTORIES: dict[str, Callable[[ToolDeps], Tool]] = {
     TemplateMatchTool.name: lambda deps: TemplateMatchTool(session=deps.session),
+    AmazonScrapeTool.name: lambda deps: AmazonScrapeTool(storage=_require(deps.storage, "storage")),
+    ViewSelectTool.name: lambda deps: ViewSelectTool(llm=_require(deps.llm, "llm")),
 }
 
 
