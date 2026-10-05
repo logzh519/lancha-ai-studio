@@ -3,7 +3,9 @@
 import pytest
 from pydantic import BaseModel
 
+from modules.tiktok_studio import tools
 from modules.tiktok_studio.tools.base import Tool, ToolError, ToolSettings
+from modules.tiktok_studio.tools.template_match import TemplateMatchTool
 
 SETTINGS = ToolSettings(timeout=5.0, trace_id="trace-1")
 
@@ -60,3 +62,17 @@ async def test_unexpected_exception_propagates():
     """未预期异常不得被吞成失败结果，否则 bug 会伪装成普通业务失败。"""
     with pytest.raises(RuntimeError, match="内部 bug"):
         await EchoTool(crash=True).execute({"value": 1}, SETTINGS)
+
+
+@pytest.mark.db
+async def test_build_constructs_registered_tool(session):
+    tool = tools.build("template_match", tools.ToolDeps(session=session))
+
+    assert isinstance(tool, TemplateMatchTool)
+    assert tool.name == "template_match"
+
+
+@pytest.mark.db
+async def test_build_rejects_unknown_name(session):
+    with pytest.raises(KeyError, match="未注册的 tool"):
+        tools.build("nope", tools.ToolDeps(session=session))

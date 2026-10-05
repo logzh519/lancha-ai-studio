@@ -1,4 +1,36 @@
 """Tool 层：一项业务能力的完整封装。
 
 边界见 docs/架构规范.md §3「模块内的 Tool 层」。
+
+调用方按名字构造，不 import 具体 Tool 类：
+
+    tool = tools.build("template_match", tools.ToolDeps(session=session))
+    result = await tool.execute({"category": "top"}, ToolSettings(timeout=10, trace_id=trace_id))
+
+新增 Tool 时在 _FACTORIES 里加一行；工厂只挑该 Tool 真正需要的依赖，保证依赖关系写在构造签名上。
 """
+
+from collections.abc import Callable
+
+from modules.tiktok_studio.tools.base import (
+    Tool,
+    ToolDeps,
+    ToolError,
+    ToolResult,
+    ToolSettings,
+)
+from modules.tiktok_studio.tools.template_match import TemplateMatchTool
+
+_FACTORIES: dict[str, Callable[[ToolDeps], Tool]] = {
+    TemplateMatchTool.name: lambda deps: TemplateMatchTool(session=deps.session),
+}
+
+
+def build(name: str, deps: ToolDeps) -> Tool:
+    factory = _FACTORIES.get(name)
+    if factory is None:
+        raise KeyError(f"未注册的 tool：{name}，已注册：{sorted(_FACTORIES)}")
+    return factory(deps)
+
+
+__all__ = ["Tool", "ToolDeps", "ToolError", "ToolResult", "ToolSettings", "build"]

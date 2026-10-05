@@ -67,6 +67,21 @@ def test_only_module_py_imports_own_worker():
     assert not offenders, f"只有 module.py 可以引用本模块的 worker/：{offenders}"
 
 
+def test_tools_do_not_import_api_or_module():
+    """Tool 封装业务能力，不碰编排；引用 api.py 或 module.py 就是把编排拉进了 Tool。"""
+    offenders = []
+    for name in discover_module_names():
+        tools_dir = SERVER / "modules" / name / "tools"
+        if not tools_dir.exists():
+            continue
+        forbidden = (f"modules.{name}.api", f"modules.{name}.module")
+        for path in tools_dir.rglob("*.py"):
+            for target in _import_targets(path):
+                if any(target == item or target.startswith(f"{item}.") for item in forbidden):
+                    offenders.append((path.relative_to(SERVER).as_posix(), target))
+    assert not offenders, f"tools/ 不得引用本模块的 api 与 module：{offenders}"
+
+
 def test_every_table_lives_in_its_own_schema():
     """平台表在 platform schema，模块表在 mod_<模块名> schema，不允许落到 public。"""
     importlib.import_module("platforms.auth.models")
