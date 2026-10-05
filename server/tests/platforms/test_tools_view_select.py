@@ -6,15 +6,14 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from modules.tiktok_studio import tools
-from modules.tiktok_studio.tools.base import ToolError, ToolSettings
-from modules.tiktok_studio.tools.view_select import (
+from platforms.llm import LLMError
+from platforms.tools import ToolDeps, ToolError, ToolSettings, platform_tools
+from platforms.tools.view_select import (
     ViewSelectTool,
     parse_view_analysis,
     text_facts,
     validate_view_selection,
 )
-from platforms.llm import LLMError
 
 SETTINGS = ToolSettings(timeout=5.0, trace_id="trace-1")
 JPEG = b"\xff\xd8\xff\xe0fake"
@@ -199,7 +198,7 @@ async def test_select_requires_at_least_two_images():
     assert result.error_code == "invalid_input"
 
 
-def test_build_requires_llm():
+def test_platform_registry_requires_llm():
     with pytest.raises(ValueError, match="llm"):
-        tools.build("view_select", tools.ToolDeps(session=None))
-    assert isinstance(tools.build("view_select", tools.ToolDeps(session=None, llm=FakeLLM(""))), ViewSelectTool)
+        platform_tools.build("view_select", ToolDeps(session=None))
+    assert isinstance(platform_tools.build("view_select", ToolDeps(session=None, llm=FakeLLM(""))), ViewSelectTool)

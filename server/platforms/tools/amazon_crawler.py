@@ -7,16 +7,16 @@ from urllib.parse import urlparse
 import httpx
 from pydantic import BaseModel, Field
 
-from modules.tiktok_studio.tools.amazon_page import (
+from platforms.storage import ObjectStorage
+from platforms.tools.amazon_page import (
     PageImage,
     detect_blocked_page,
     parse_product_page,
 )
-from modules.tiktok_studio.tools.base import Tool, ToolError, ToolSettings, retry_async
-from platforms.storage import ObjectStorage
+from platforms.tools.base import Tool, ToolError, ToolSettings, retry_async
 
 AMAZON_DOMAIN = "www.amazon.com"
-STORAGE_PREFIX = "tiktok_studio/amazon"
+STORAGE_PREFIX = "amazon"
 # 网络失败、被拦截、上游报错可能是瞬时的；商品不存在、页面无内容重试也没用
 RETRYABLE_CODES = {"amazon_fetch_failed", "amazon_http_error", "amazon_blocked", "image_download_failed"}
 

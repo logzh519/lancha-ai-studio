@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from platforms.llm import AsyncLLMClient
 from platforms.storage import ObjectStorage
 
-logger = logging.getLogger("tiktok_studio.tools")
+logger = logging.getLogger("platforms.tools")
 
 
 @dataclass(frozen=True)

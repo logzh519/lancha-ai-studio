@@ -12,15 +12,15 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, Field, HttpUrl
 
-from modules.tiktok_studio.tools.amazon_page import clean_text
-from modules.tiktok_studio.tools.base import (
+from platforms.llm import AsyncLLMClient, LLMError
+from platforms.tools.amazon_page import clean_text
+from platforms.tools.base import (
     Tool,
     ToolError,
     ToolSettings,
     logger,
     retry_async,
 )
-from platforms.llm import AsyncLLMClient, LLMError
 
 VIEW_INSTRUCTION = """You select factual garment references for a fixed dummy front/side/back try-on workflow.
 All candidate images come from one Feishu Amazon SKU record, but may contain front, back, exact side, front three-quarter, back three-quarter, detail, duplicate, size-chart, lifestyle, another colorway, or another product.

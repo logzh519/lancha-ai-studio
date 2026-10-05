@@ -5,10 +5,9 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from modules.tiktok_studio import tools
-from modules.tiktok_studio.tools.amazon_crawler import AmazonCrawlerTool
-from modules.tiktok_studio.tools.amazon_page import PageImage, parse_product_page
-from modules.tiktok_studio.tools.base import ToolSettings
+from platforms.tools import ToolDeps, ToolSettings, platform_tools
+from platforms.tools.amazon_crawler import AmazonCrawlerTool
+from platforms.tools.amazon_page import PageImage, parse_product_page
 
 SETTINGS = ToolSettings(timeout=5.0, trace_id="trace-1")
 
@@ -133,13 +132,13 @@ async def test_scrape_returns_content_and_stores_images():
     assert output["main_image"] == {
         "variant": "MAIN",
         "source_url": "https://m.media-amazon.com/images/I/main._AC_SL1500_.jpg",
-        "key": "tiktok_studio/amazon/B0TEST0001/01_MAIN.jpg",
-        "url": "https://cdn.test/tiktok_studio/amazon/B0TEST0001/01_MAIN.jpg",
+        "key": "amazon/B0TEST0001/01_MAIN.jpg",
+        "url": "https://cdn.test/amazon/B0TEST0001/01_MAIN.jpg",
     }
-    assert [image["key"] for image in output["gallery_images"]] == ["tiktok_studio/amazon/B0TEST0001/02_PT01.jpg"]
+    assert [image["key"] for image in output["gallery_images"]] == ["amazon/B0TEST0001/02_PT01.jpg"]
     assert storage.uploaded == {
-        "tiktok_studio/amazon/B0TEST0001/01_MAIN.jpg": b"main",
-        "tiktok_studio/amazon/B0TEST0001/02_PT01.jpg": b"pt1",
+        "amazon/B0TEST0001/01_MAIN.jpg": b"main",
+        "amazon/B0TEST0001/02_PT01.jpg": b"pt1",
     }
 
 
@@ -187,8 +186,7 @@ async def test_scrape_rejects_invalid_asin():
     assert result.error_code == "invalid_input"
 
 
-def test_build_requires_storage():
+def test_platform_registry_requires_storage():
     with pytest.raises(ValueError, match="storage"):
-        tools.build("amazon_crawler", tools.ToolDeps(session=None))
-    tool = tools.build("amazon_crawler", tools.ToolDeps(session=None, storage=FakeStorage()))
-    assert isinstance(tool, AmazonCrawlerTool)
+        platform_tools.build("amazon_crawler", ToolDeps(session=None))
+    assert isinstance(platform_tools.build("amazon_crawler", ToolDeps(session=None, storage=FakeStorage())), AmazonCrawlerTool)

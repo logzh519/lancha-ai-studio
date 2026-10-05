@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from modules.tiktok_studio import service
 from modules.tiktok_studio.schemas import Category
-from modules.tiktok_studio.tools.base import Tool, ToolError, ToolSettings
+from platforms.tools import Tool, ToolError, ToolSettings
 
 
 class TemplateMatchInput(BaseModel):
