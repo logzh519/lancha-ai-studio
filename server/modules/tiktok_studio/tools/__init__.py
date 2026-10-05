@@ -21,6 +21,8 @@ from modules.tiktok_studio.tools.base import (
 )
 from modules.tiktok_studio.tools.template_match import TemplateMatchTool
 
+
+# 工具注册工厂：按名字构造，不 import 具体 Tool 类
 _FACTORIES: dict[str, Callable[[ToolDeps], Tool]] = {
     TemplateMatchTool.name: lambda deps: TemplateMatchTool(session=deps.session),
 }
