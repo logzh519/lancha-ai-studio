@@ -6,6 +6,22 @@ export default defineModule({
   name: 'tiktok_studio',
   routes: [
     {
+      path: 'video-workshop',
+      component: () => import('./views/VideoWorkshopLayout.vue'),
+      redirect: '/tiktok_studio/video-workshop/task-create',
+      children: [
+        {
+          path: 'task-create',
+          component: () => import('./views/TaskCreateView.vue'),
+          meta: { permission: 'tiktok_studio:batch:create' },
+        },
+      ],
+    },
+    {
+      path: 'task-create',
+      redirect: '/tiktok_studio/video-workshop/task-create',
+    },
+    {
       path: 'script-templates',
       component: () => import('./views/ScriptTemplateListView.vue'),
       meta: { permission: 'tiktok_studio:script_template:view' },

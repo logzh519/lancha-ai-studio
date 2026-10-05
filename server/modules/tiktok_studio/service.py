@@ -5,23 +5,230 @@
 """
 
 import asyncio
+import hashlib
+import json
 import logging
+import re
 import uuid
+from collections import Counter
 from dataclasses import dataclass
 
 from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from modules.tiktok_studio.models import SCHEMA, ProductMaster, ScriptTemplate
+from modules.tiktok_studio.models import (
+    SCHEMA,
+    Batch,
+    ProductMaster,
+    ScriptTemplate,
+    Task,
+)
 from modules.tiktok_studio.schemas import (
     EXTERNAL,
+    BatchCreateRequest,
     ProductMasterFields,
     ScriptTemplateFields,
+    TaskOrderPreviewItem,
 )
 from platforms.storage import get_storage
+from platforms.tools import ToolDeps, ToolSettings, platform_tools
 
 ERROR_MAX_LENGTH = 2000
 logger = logging.getLogger(__name__)
+SKU_SEPARATORS = re.compile(r"[;；,，\s]+")
+PIPELINE_KEY = "video_gen_15s"
+
+
+class InvalidTaskOrder(ValueError):
+    """建单中包含无法确认的商品映射。"""
+
+
+class IdempotencyConflict(ValueError):
+    """同一个请求 ID 被用于不同的建单内容。"""
+
+
+def normalize_skus(raw: list[str]) -> list[str]:
+    """按分隔符拆分货号，转大写并稳定去重。"""
+    skus = (sku.upper() for entry in raw for sku in SKU_SEPARATORS.split(entry.strip()) if sku)
+    return list(dict.fromkeys(skus))
+
+
+def _lookup_tool(session: AsyncSession):
+    return platform_tools.build("product_lookup", ToolDeps(session=session))
+
+
+async def _lookup_sku(session: AsyncSession, sku: str) -> list[dict]:
+    result = await _lookup_tool(session).execute(
+        {"sku": sku}, ToolSettings(timeout=10.0, trace_id=f"task_order:{sku}")
+    )
+    if not result.success:
+        if result.error_code == "product_not_found":
+            return []
+        raise InvalidTaskOrder(result.error_message or f"查询货号 {sku} 失败")
+    return result.output["items"]
+
+
+async def preview_task_order(
+    session: AsyncSession, raw_skus: list[str], created_by: int
+) -> list[TaskOrderPreviewItem]:
+    skus = normalize_skus(raw_skus)
+    rows: list[TaskOrderPreviewItem] = []
+    for sku in skus:
+        try:
+            records = await _lookup_sku(session, sku)
+        except InvalidTaskOrder as exc:
+            rows.append(TaskOrderPreviewItem(sku=sku, asin=None, color=None, shop=None, warnings=[str(exc)]))
+            continue
+        if not records:
+            rows.append(TaskOrderPreviewItem(sku=sku, asin=None, color=None, shop=None, warnings=["未找到 ASIN"]))
+            continue
+        rows.extend(
+            TaskOrderPreviewItem(
+                sku=record["sku"],
+                asin=record["asin"],
+                color=record["color"],
+                shop=record["store"],
+                warnings=[] if record["asin"] else ["未找到 ASIN"],
+            )
+            for record in records
+        )
+
+    asins = [row.asin for row in rows if row.asin]
+    if not asins:
+        return rows
+    duplicate_asins = {asin for asin, count in Counter(asins).items() if count > 1}
+    active_asins = set(
+        (await session.execute(
+            select(Task.biz_key).where(
+                Task.created_by == created_by,
+                Task.biz_key.in_(asins),
+                Task.status.not_in(("completed", "failed", "cancelled")),
+            )
+        )).scalars()
+    )
+    for row in rows:
+        if row.asin in duplicate_asins:
+            row.warnings.append("本次展开中 ASIN 重复")
+        if row.asin in active_asins:
+            row.warnings.append("你已有该 ASIN 的未完成任务")
+    return rows
+
+
+def _batch_request_hash(payload: BatchCreateRequest, items: list[dict]) -> str:
+    canonical = {
+        "name": payload.name.strip(),
+        "pipeline_key": payload.pipeline_key,
+        "items": sorted(items, key=lambda item: (item["sku"], item["asin"])),
+        "note": payload.note.strip() if payload.note else None,
+    }
+    return hashlib.sha256(json.dumps(canonical, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+
+
+async def create_video_batch(
+    session: AsyncSession, payload: BatchCreateRequest, created_by: int
+) -> Batch:
+    if payload.pipeline_key != PIPELINE_KEY:
+        raise InvalidTaskOrder("当前仅支持 15 秒视频生产管线")
+    name = payload.name.strip()
+    if not name:
+        raise InvalidTaskOrder("批次名称不能为空")
+
+    items = [
+        {
+            "sku": item.sku.strip().upper(),
+            "asin": item.asin.strip().upper(),
+            "color": item.color.strip() if item.color else None,
+            "shop": item.shop.strip() if item.shop else None,
+        }
+        for item in payload.items
+    ]
+    asins = [item["asin"] for item in items]
+    if len(asins) != len(set(asins)):
+        raise InvalidTaskOrder("同一批次不能包含重复 ASIN")
+
+    request_id = str(payload.request_id)
+    request_hash = _batch_request_hash(payload, items)
+    lock_id = int.from_bytes(
+        hashlib.sha256(f"{created_by}:{request_id}".encode()).digest()[:8], "big", signed=True
+    )
+    await session.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": lock_id})
+    existing = await session.scalar(
+        select(Batch).where(Batch.created_by == created_by, Batch.request_id == request_id)
+    )
+    if existing:
+        if existing.request_hash != request_hash:
+            raise IdempotencyConflict("该请求编号已用于不同的建单内容")
+        return existing
+
+    records_by_sku = {
+        sku: await _lookup_sku(session, sku) for sku in dict.fromkeys(item["sku"] for item in items)
+    }
+    for item in items:
+        match = next(
+            (
+                record
+                for record in records_by_sku[item["sku"]]
+                if record["asin"] == item["asin"]
+                and record["color"] == item["color"]
+                and record["store"] == item["shop"]
+            ),
+            None,
+        )
+        if match is None:
+            raise InvalidTaskOrder(f"货号 {item['sku']} 的 ASIN/颜色/店铺映射已变化，请重新预览")
+
+    batch = Batch(
+        name=name,
+        pipeline_key=payload.pipeline_key,
+        request_id=request_id,
+        request_hash=request_hash,
+        status="running",
+        total_tasks=len(items),
+        note=payload.note.strip() if payload.note else None,
+        created_by=created_by,
+    )
+    session.add(batch)
+    await session.flush()
+    session.add_all(
+        Task(
+            batch_id=batch.id,
+            pipeline_key=batch.pipeline_key,
+            created_by=created_by,
+            biz_key=item["asin"],
+            context=item,
+            status="admitted_pending",
+            priority=100,
+        )
+        for item in items
+    )
+    await session.flush()
+    await session.refresh(batch)
+    return batch
+
+
+async def list_video_batches(
+    session: AsyncSession, created_by: int, offset: int, limit: int
+) -> tuple[list[Batch], int]:
+    conditions = (Batch.created_by == created_by,)
+    total = await session.scalar(select(func.count()).select_from(Batch).where(*conditions))
+    stmt = select(Batch).where(*conditions).order_by(Batch.created_at.desc(), Batch.id.desc())
+    batches = list((await session.execute(stmt.offset(offset).limit(limit))).scalars())
+    return batches, total or 0
+
+
+async def list_batch_tasks(
+    session: AsyncSession, batch_id: str, created_by: int, offset: int, limit: int
+) -> tuple[list[Task], int] | None:
+    batch_exists = await session.scalar(
+        select(Batch.id).where(Batch.id == batch_id, Batch.created_by == created_by)
+    )
+    if batch_exists is None:
+        return None
+    conditions = (Task.batch_id == batch_id, Task.created_by == created_by)
+    total = await session.scalar(select(func.count()).select_from(Task).where(*conditions))
+    stmt = select(Task).where(*conditions).order_by(Task.created_at, Task.id)
+    tasks = list((await session.execute(stmt.offset(offset).limit(limit))).scalars())
+    return tasks, total or 0
 
 
 @dataclass(frozen=True, order=True)

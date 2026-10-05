@@ -10,6 +10,8 @@ MODULE = ModuleSpec(
     version="0.1.0",
     router=router,
     permissions=(
+        PermissionDef("tiktok_studio:order:preview", "预览视频任务建单"),
+        PermissionDef("tiktok_studio:batch:create", "创建视频任务批次"),
         PermissionDef("tiktok_studio:script_template:view", "查看爆款脚本"),
         PermissionDef("tiktok_studio:script_template:create", "新建爆款脚本"),
         PermissionDef("tiktok_studio:script_template:update", "修改爆款脚本"),
@@ -20,6 +22,13 @@ MODULE = ModuleSpec(
         PermissionDef("tiktok_studio:product_master:delete", "删除商品资产"),
     ),
     menus=(
+        MenuDef(
+            "AI视频工坊",
+            "/tiktok_studio/video-workshop",
+            icon="list",
+            order=32,
+            permission="tiktok_studio:batch:create",
+        ),
         MenuDef(
             "爆款脚本库",
             "/tiktok_studio/script-templates",

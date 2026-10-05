@@ -162,3 +162,85 @@ export const importProductMasters = (skus: string[]) =>
 
 export const retryProductImport = (id: number) =>
   request<ProductMaster>(`${PRODUCT_BASE}/${id}/retry-import`, { method: 'POST' })
+
+export interface TaskOrderPreviewItem {
+  sku: string
+  asin: string | null
+  color: string | null
+  shop: string | null
+  warnings: string[]
+}
+
+export interface TaskOrderPreview {
+  items: TaskOrderPreviewItem[]
+}
+
+export interface BatchCreatePayload {
+  request_id: string
+  name: string
+  pipeline_key: 'video_gen_15s'
+  items: Array<Pick<TaskOrderPreviewItem, 'sku' | 'asin' | 'color' | 'shop'> & { asin: string }>
+  note: string | null
+}
+
+export interface BatchCreateResult {
+  id: string
+  name: string
+  pipeline_key: string
+  status: string
+  total_tasks: number
+  created_by: number
+}
+
+export interface BatchSummary {
+  id: string
+  name: string
+  pipeline_key: string
+  status: string
+  total_tasks: number
+  note: string | null
+  created_at: string
+}
+
+export interface BatchPage {
+  items: BatchSummary[]
+  total: number
+}
+
+export interface TaskSummary {
+  id: string
+  batch_id: string
+  biz_key: string
+  context: Pick<TaskOrderPreviewItem, 'sku' | 'asin' | 'color' | 'shop'>
+  status: string
+  created_at: string
+}
+
+export interface TaskPage {
+  items: TaskSummary[]
+  total: number
+}
+
+const TASK_ORDER_BASE = '/tiktok_studio'
+
+export const previewTaskOrder = (skus: string[]) =>
+  request<TaskOrderPreview>(`${TASK_ORDER_BASE}/orders/preview`, {
+    method: 'POST',
+    body: JSON.stringify({ skus }),
+  })
+
+export const createTaskBatch = (payload: BatchCreatePayload) =>
+  request<BatchCreateResult>(`${TASK_ORDER_BASE}/batches`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+
+export const listTaskBatches = (page = 1, pageSize = 20) => {
+  const query = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
+  return request<BatchPage>(`${TASK_ORDER_BASE}/batches?${query}`)
+}
+
+export const listBatchTasks = (batchId: string, page = 1, pageSize = 100) => {
+  const query = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
+  return request<TaskPage>(`${TASK_ORDER_BASE}/batches/${encodeURIComponent(batchId)}/tasks?${query}`)
+}

@@ -13,18 +13,111 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from modules.tiktok_studio import importing, service
 from modules.tiktok_studio.models import ProductMaster, ScriptTemplate
 from modules.tiktok_studio.schemas import (
+    BatchPage,
+    BatchCreateRequest,
+    BatchCreateResponse,
+    BatchSummary,
     Category,
     ImportStatus,
     ProductMasterFields,
     ScriptTemplateFields,
     Status,
     StoredObject,
+    TaskOrderPreviewRequest,
+    TaskOrderPreviewResponse,
+    TaskPage,
+    TaskSummary,
 )
 from platforms.auth.dependencies import require
 from platforms.auth.principal import Principal
 from platforms.db import get_session
 
 router = APIRouter()
+
+
+@router.post(
+    "/orders/preview",
+    response_model=TaskOrderPreviewResponse,
+)
+async def preview_task_order(
+    payload: TaskOrderPreviewRequest,
+    principal: Principal = Depends(require("tiktok_studio:order:preview")),
+    session: AsyncSession = Depends(get_session),
+):
+    try:
+        items = await service.preview_task_order(session, payload.skus, principal.user_id)
+    except service.InvalidTaskOrder as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+    return TaskOrderPreviewResponse(items=items)
+
+
+@router.post(
+    "/batches",
+    response_model=BatchCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_video_batch(
+    payload: BatchCreateRequest,
+    principal: Principal = Depends(require("tiktok_studio:batch:create")),
+    session: AsyncSession = Depends(get_session),
+):
+    try:
+        batch = await service.create_video_batch(session, payload, principal.user_id)
+    except service.IdempotencyConflict as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    except service.InvalidTaskOrder as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    await session.commit()
+    return BatchCreateResponse(
+        id=batch.id,
+        name=batch.name,
+        pipeline_key=batch.pipeline_key,
+        status=batch.status,
+        total_tasks=batch.total_tasks,
+        created_by=batch.created_by,
+    )
+
+
+@router.get(
+    "/batches",
+    response_model=BatchPage,
+)
+async def list_video_batches(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    principal: Principal = Depends(require("tiktok_studio:batch:create")),
+    session: AsyncSession = Depends(get_session),
+):
+    batches, total = await service.list_video_batches(
+        session, principal.user_id, (page - 1) * page_size, page_size
+    )
+    return BatchPage(
+        items=[BatchSummary.model_validate(batch, from_attributes=True) for batch in batches],
+        total=total,
+    )
+
+
+@router.get(
+    "/batches/{batch_id}/tasks",
+    response_model=TaskPage,
+)
+async def list_batch_tasks(
+    batch_id: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=200),
+    principal: Principal = Depends(require("tiktok_studio:batch:create")),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await service.list_batch_tasks(
+        session, batch_id, principal.user_id, (page - 1) * page_size, page_size
+    )
+    if result is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "批次不存在")
+    tasks, total = result
+    return TaskPage(
+        items=[TaskSummary.model_validate(task, from_attributes=True) for task in tasks],
+        total=total,
+    )
 
 
 class ScriptTemplateSummary(BaseModel):

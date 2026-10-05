@@ -1,14 +1,17 @@
 """模块的表全部建在自己的 schema（mod_tiktok_studio）下，不允许出现指向其他模块 schema 的外键。"""
 
+import uuid
 from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
     text,
 )
@@ -78,6 +81,74 @@ class ProductMaster(Base):
         BigInteger, ForeignKey(AppUser.id, ondelete="SET NULL")
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Batch(Base):
+    """一次运营确认的批量视频任务。"""
+
+    __tablename__ = "batch"
+    __table_args__ = (
+        UniqueConstraint("created_by", "request_id", name="uq_batch_created_request"),
+        Index("ix_batch_created_by", "created_by", "created_at"),
+        Index("ix_batch_status", "status"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name: Mapped[str] = mapped_column(String(255))
+    pipeline_key: Mapped[str] = mapped_column(String(64), default="video_gen_15s")
+    request_id: Mapped[str] = mapped_column(String(36))
+    request_hash: Mapped[str] = mapped_column(String(64))
+    review_overrides: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    status: Mapped[str] = mapped_column(String(16), default="running")
+    total_tasks: Mapped[int] = mapped_column(Integer, default=0)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[int] = mapped_column(BigInteger, ForeignKey(AppUser.id, ondelete="RESTRICT"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Task(Base):
+    """批次内单个 ASIN 对应的视频任务。"""
+
+    __tablename__ = "task"
+    __table_args__ = (
+        UniqueConstraint("batch_id", "biz_key", name="uq_task_batch_bizkey"),
+        Index("ix_task_batch", "batch_id"),
+        Index("ix_task_created_by_status", "created_by", "status"),
+        Index("ix_task_biz_key", "biz_key"),
+        Index(
+            "ix_task_admit",
+            "status",
+            "priority",
+            "created_at",
+            postgresql_where=text("status = 'admitted_pending'"),
+        ),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    batch_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey(f"{SCHEMA}.batch.id", ondelete="CASCADE")
+    )
+    pipeline_key: Mapped[str] = mapped_column(String(64), default="video_gen_15s")
+    created_by: Mapped[int] = mapped_column(BigInteger, ForeignKey(AppUser.id, ondelete="RESTRICT"))
+    biz_key: Mapped[str] = mapped_column(String(255))
+    context: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    status: Mapped[str] = mapped_column(String(24), default="admitted_pending")
+    priority: Mapped[int] = mapped_column(Integer, default=100)
+    progress: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    admitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
