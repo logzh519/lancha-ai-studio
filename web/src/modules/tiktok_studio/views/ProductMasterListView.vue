@@ -14,6 +14,7 @@ import {
   retryProductImport,
   type StageTrace,
 } from '../api'
+import ProductMasterFormView from './ProductMasterFormView.vue'
 
 const PAGE_SIZE = 20
 const MAX_IMPORT_SKUS = 50
@@ -25,7 +26,7 @@ const TRACE_MAX_HEIGHT = 420
 const TRACE_HIDE_DELAY_MS = 150
 const IMPORT_STAGES: { key: ImportStage; label: string }[] = [
   { key: 'crawl', label: '详情' },
-  { key: 'view', label: '识别三视图参考图' },
+  { key: 'view', label: '三视图参考图' },
   { key: 'gen', label: '生成三视图' },
 ]
 
@@ -47,6 +48,7 @@ const importInput = ref('')
 const importError = ref('')
 const importNotice = ref('')
 const importing = ref(false)
+const drawerId = ref<number | null>(null)
 let pollTimer: ReturnType<typeof setTimeout> | undefined
 const preview = ref<{ url: string; top: number; left: number } | null>(null)
 let previewTimer: ReturnType<typeof setTimeout> | undefined
@@ -191,6 +193,17 @@ async function retry(product: ProductMasterSummary): Promise<void> {
   } finally {
     retryingId.value = null
   }
+}
+
+function openDrawer(product: ProductMasterSummary): void {
+  hidePreview()
+  hideTrace(0)
+  drawerId.value = product.id
+}
+
+async function onDrawerSaved(): Promise<void> {
+  drawerId.value = null
+  await load(page.value)
 }
 
 function isOwner(product: ProductMasterSummary): boolean {
@@ -384,9 +397,9 @@ onUnmounted(() => {
                 <span v-else class="text-weak">—</span>
               </td>
               <td class="font-bold text-main">
-                <RouterLink :to="`/tiktok_studio/product-masters/${product.id}`" class="name-link">
+                <button type="button" class="name-link" @click="openDrawer(product)">
                   {{ product.sku }}
-                </RouterLink>
+                </button>
               </td>
               <td class="text-center font-mono">{{ product.asin || '—' }}</td>
               <td class="text-center">{{ product.color || '—' }}</td>
@@ -423,13 +436,14 @@ onUnmounted(() => {
                   >
                     {{ retryingId === product.id ? '重试中...' : '重试' }}
                   </button>
-                  <RouterLink
-                    :to="`/tiktok_studio/product-masters/${product.id}`"
+                  <button
+                    type="button"
                     class="action-link"
-                    :class="{ disabled: deletingIds.has(product.id) }"
+                    :disabled="deletingIds.has(product.id)"
+                    @click="openDrawer(product)"
                   >
                     编辑
-                  </RouterLink>
+                  </button>
                   <button
                     type="button"
                     class="action-link danger"
@@ -440,13 +454,14 @@ onUnmounted(() => {
                   </button>
                 </template>
                 <template v-else>
-                  <RouterLink
-                    :to="`/tiktok_studio/product-masters/${product.id}`"
+                  <button
+                    type="button"
                     class="action-link"
-                    :class="{ disabled: deletingIds.has(product.id) }"
+                    :disabled="deletingIds.has(product.id)"
+                    @click="openDrawer(product)"
                   >
                     查看
-                  </RouterLink>
+                  </button>
                 </template>
               </td>
             </tr>
@@ -537,6 +552,19 @@ onUnmounted(() => {
           </template>
         </dl>
       </div>
+      <Transition name="drawer">
+        <div v-if="drawerId !== null" class="drawer-overlay" role="dialog" aria-modal="true">
+          <aside class="drawer-panel">
+            <ProductMasterFormView
+              :id="drawerId"
+              :key="drawerId"
+              @close="drawerId = null"
+              @regenerated="load(page)"
+              @saved="onDrawerSaved"
+            />
+          </aside>
+        </div>
+      </Transition>
     </Teleport>
 
     <ConfirmDialog
@@ -854,7 +882,12 @@ onUnmounted(() => {
 }
 
 .name-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
   color: var(--color-text);
+  cursor: pointer;
   transition: color var(--transition-fast);
 }
 
@@ -1250,5 +1283,44 @@ onUnmounted(() => {
 
 .import-error {
   color: var(--color-danger-text);
+}
+
+/* 编辑抽屉 */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.drawer-panel {
+  width: min(960px, 100vw);
+  height: 100%;
+  overflow-y: auto;
+  padding: 0 var(--space-md) var(--space-md);
+  background: var(--color-bg, #f8fafc);
+  box-shadow: -12px 0 32px rgba(15, 23, 42, 0.18);
+}
+
+.drawer-enter-active,
+.drawer-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.drawer-enter-active .drawer-panel,
+.drawer-leave-active .drawer-panel {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.drawer-enter-from,
+.drawer-leave-to {
+  opacity: 0;
+}
+
+.drawer-enter-from .drawer-panel,
+.drawer-leave-to .drawer-panel {
+  transform: translateX(100%);
 }
 </style>

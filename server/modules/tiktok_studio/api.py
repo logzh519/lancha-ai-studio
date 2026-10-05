@@ -4,9 +4,9 @@
 """
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -252,6 +252,21 @@ async def retry_product_import(product_id: int, session: AsyncSession = Depends(
     return ProductMasterOut.model_validate(product, from_attributes=True)
 
 
+@router.post(
+    "/product-masters/{product_id}/regenerate-three-view",
+    response_model=ProductMasterOut,
+    dependencies=[Depends(require("tiktok_studio:product_master:update"))],
+)
+async def regenerate_three_view(product_id: int, session: AsyncSession = Depends(get_session)):
+    product = await _get_product_or_404(session, product_id)
+    try:
+        await service.regenerate_three_view(session, product)
+    except service.RegenerateUnavailable as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await session.commit()
+    return ProductMasterOut.model_validate(product, from_attributes=True)
+
+
 @router.put(
     "/product-masters/{product_id}",
     response_model=ProductMasterOut,
@@ -269,6 +284,40 @@ async def update_product_master(
     await session.commit()
     await service.purge_objects(orphans)
     return ProductMasterOut.model_validate(product, from_attributes=True)
+
+
+IMAGE_MAX_BYTES = 10 * 1024 * 1024
+# 三视图参考图只能选自主图副图，不接受上传
+ImageField = Literal["main_image", "sub_images", "three_view_images"]
+
+
+@router.post(
+    "/product-masters/{product_id}/images/{field}",
+    response_model=StoredObject,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require("tiktok_studio:product_master:update"))],
+)
+async def upload_product_image(
+    product_id: int,
+    field: ImageField,
+    request: Request,
+    content_type: str = Header(),
+    session: AsyncSession = Depends(get_session),
+):
+    """请求体为图片原始字节，Content-Type 标明图片格式。"""
+    mime = content_type.split(";", 1)[0].strip().lower()
+    if mime not in service.IMAGE_EXTENSIONS:
+        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "仅支持 JPG、PNG、WebP、GIF 图片")
+    content = await request.body()
+    if not content:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "图片内容为空")
+    if len(content) > IMAGE_MAX_BYTES:
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "图片不能超过 10MB")
+    product = await _get_product_or_404(session, product_id)
+    image, orphans = await service.upload_product_image(session, product, field, content, mime)
+    await session.commit()
+    await service.purge_objects(orphans)
+    return image
 
 
 @router.delete(

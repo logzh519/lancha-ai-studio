@@ -48,5 +48,13 @@ class ProductMasterFields(BaseModel):
     selling_points: str | None = None
     main_image: StoredObject | None = None
     sub_images: list[StoredObject] = []
-    three_view_images: list[StoredObject] = Field(default=[], max_length=3)
+    three_view_images: list[StoredObject] = Field(default=[], max_length=1)     # 生成的是一张三联图
     three_view_reference_images: list[StoredObject] = Field(default=[], max_length=3)
+
+    @model_validator(mode="after")
+    def _check_references(self) -> "ProductMasterFields":
+        """三视图参考图只能选自主图或副图，与自动识别的候选范围一致。"""
+        candidates = [self.main_image, *self.sub_images]
+        if any(image not in candidates for image in self.three_view_reference_images):
+            raise ValueError("三视图参考图只能从主图或副图中选择")
+        return self

@@ -6,6 +6,7 @@
 
 import asyncio
 import logging
+import uuid
 from dataclasses import dataclass
 
 from sqlalchemy import func, or_, select, text, update
@@ -168,6 +169,32 @@ async def update_product_master(
     return product, sorted(before - _product_refs(product))
 
 
+IMAGE_EXTENSIONS = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}
+UPLOAD_PREFIX = "tiktok_studio/product_masters"
+
+
+async def upload_product_image(
+    session: AsyncSession, product: ProductMaster, field: str, content: bytes, mime: str
+) -> tuple[dict, list[StoredRef]]:
+    """上传图片并写入商品字段：主图与三视图（只有一张）直接替换，副图追加到末尾。返回新图片与需要删除的存储对象。"""
+    storage = get_storage()
+    key = f"{UPLOAD_PREFIX}/{product.id}/{uuid.uuid4().hex}.{IMAGE_EXTENSIONS[mime]}"
+    record = await asyncio.to_thread(storage.upload, key, content)
+    image = {"key": key, "url": record.url, "type": storage.type}
+
+    def apply(target: ProductMaster) -> None:
+        if field == "main_image":
+            target.main_image = image
+        elif field == "three_view_images":
+            target.three_view_images = [image]
+        else:
+            setattr(target, field, [*getattr(target, field), image])
+
+    orphans = await _apply_images(session, product, [image], apply)
+    await session.refresh(product)
+    return image, orphans
+
+
 async def delete_product_master(session: AsyncSession, product: ProductMaster) -> list[StoredRef]:
     """返回需要删除的存储对象。"""
     refs = _product_refs(product)
@@ -224,6 +251,22 @@ async def retry_product_import(session: AsyncSession, product: ProductMaster) ->
     await session.flush()
     await session.refresh(product)
     return True
+
+
+class RegenerateUnavailable(ValueError):
+    """当前状态不能重新生成三视图。"""
+
+
+async def regenerate_three_view(session: AsyncSession, product: ProductMaster) -> None:
+    """把三视图生成阶段置为 pending，由 worker 按当前参考图重新生成。"""
+    if product.gen_status in ("pending", "running"):
+        raise RegenerateUnavailable("三视图正在生成中，请稍后再试")
+    if product.view_status != "done":
+        raise RegenerateUnavailable("三视图参考图尚未识别完成，无法生成三视图")
+    product.gen_status, product.gen_error = "pending", None
+    _set_trace(product, "gen", None)
+    await session.flush()
+    await session.refresh(product)
 
 
 @dataclass(frozen=True)

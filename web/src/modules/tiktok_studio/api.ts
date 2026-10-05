@@ -136,6 +136,21 @@ export const updateProductMaster = (id: number, fields: ProductMasterFields) =>
 
 export const deleteProductMaster = (id: number) => request<void>(`${PRODUCT_BASE}/${id}`, { method: 'DELETE' })
 
+/** 由后台按当前参考图重新生成三视图，进度体现在导入状态的生成阶段 */
+export const regenerateThreeView = (id: number) =>
+  request<ProductMaster>(`${PRODUCT_BASE}/${id}/regenerate-three-view`, { method: 'POST' })
+
+/** 三视图参考图只能选自主图副图，不能上传 */
+export type ProductImageField = 'main_image' | 'sub_images' | 'three_view_images'
+
+/** 上传后立即写入商品对应字段：主图替换，其余字段追加 */
+export const uploadProductImage = (id: number, field: ProductImageField, file: File) =>
+  request<StoredObject>(`${PRODUCT_BASE}/${id}/images/${field}`, {
+    method: 'POST',
+    body: file,
+    headers: { 'Content-Type': file.type },
+  })
+
 export interface ProductImportResult {
   created: ProductMasterSummary[]
   skipped: number

@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -33,21 +35,28 @@ PAYLOAD = {
     "selling_points": "透气\n不起球",
     "main_image": ext("main"),
     "sub_images": [ext("sub1"), ext("sub2")],
-    "three_view_images": [ext("f"), ext("s"), ext("b")],
-    "three_view_reference_images": [ext("ref")],
+    "three_view_images": [ext("three_view")],
+    "three_view_reference_images": [ext("main"), ext("sub1")],
 }
 
 
 class FakeStorage:
-    """记录 get_storage(type) 后的删除调用；key 以 fail 开头时模拟删除失败。"""
+    """记录 get_storage(type) 后的上传与删除调用；key 以 fail 开头时模拟删除失败。缺省存储类型为 tos。"""
 
     def __init__(self) -> None:
         self.deleted: list[tuple[str, str]] = []
+        self.uploaded: list[tuple[str, bytes]] = []
 
-    def get(self, provider: str):
+    def get(self, provider: str = "tos"):
         storage = self
 
         class _Storage:
+            type = provider
+
+            def upload(self, key: str, data: bytes):
+                storage.uploaded.append((key, data))
+                return SimpleNamespace(url=f"https://cdn.test/{key}")
+
             def delete_file(self, key: str) -> None:
                 if key.startswith("fail"):
                     raise RuntimeError("boom")
@@ -97,7 +106,8 @@ async def test_crud_flow(client, session, storage):
     assert listed[0]["main_image"] == PAYLOAD["main_image"]
     assert "description" not in listed[0]
 
-    updated = await client.put(f"{BASE}/{product_id}", json={**PAYLOAD, "color": "白色", "sub_images": []}, headers=admin)
+    changes = {"color": "白色", "sub_images": [], "three_view_reference_images": [ext("main")]}
+    updated = await client.put(f"{BASE}/{product_id}", json={**PAYLOAD, **changes}, headers=admin)
     assert updated.status_code == 200
     assert (updated.json()["color"], updated.json()["sub_images"]) == ("白色", [])
 
@@ -157,6 +167,68 @@ async def test_update_purges_removed_objects_and_rejects_unknown_ones(client, se
     assert storage.deleted == [("tos", "amazon/B0Y/02_PT01.jpg")]
 
 
+async def test_upload_image_persists_to_product(client, session, storage):
+    admin = await _user(session, "tiktok_admin", superuser=True)
+    product = await _stored_product(
+        session, "UP-1", main_image=tos("amazon/B0U/01_MAIN.jpg"), sub_images=[ext("old")],
+        three_view_images=[tos("amazon/B0U/THREE_VIEW.png")],
+    )
+    png = {**admin, "Content-Type": "image/png"}
+
+    sub = await client.post(f"{BASE}/{product.id}/images/sub_images", content=b"sub", headers=png)
+    assert sub.status_code == 201
+    key = sub.json()["key"]
+    assert key.startswith(f"tiktok_studio/product_masters/{product.id}/") and key.endswith(".png")
+    assert sub.json() == tos(key)
+
+    main = await client.post(f"{BASE}/{product.id}/images/main_image", content=b"main", headers=png)
+    assert main.status_code == 201
+    three_view = await client.post(f"{BASE}/{product.id}/images/three_view_images", content=b"tv", headers=png)
+    assert three_view.status_code == 201
+    assert [data for _, data in storage.uploaded] == [b"sub", b"main", b"tv"]
+    assert storage.deleted == [("tos", "amazon/B0U/01_MAIN.jpg"), ("tos", "amazon/B0U/THREE_VIEW.png")]
+
+    detail = (await client.get(f"{BASE}/{product.id}", headers=admin)).json()
+    assert detail["main_image"] == main.json()
+    assert detail["sub_images"] == [ext("old"), sub.json()]
+    assert detail["three_view_images"] == [three_view.json()]    # 三视图只有一张，上传即替换
+
+    saved = await client.put(f"{BASE}/{product.id}", json={"sku": "UP-1", "sub_images": [sub.json()]}, headers=admin)
+    assert saved.status_code == 200
+
+
+async def test_upload_image_rejects_invalid_requests(client, session, storage):
+    admin = await _user(session, "tiktok_admin", superuser=True)
+    product = await _stored_product(session, "UP-2")
+    url = f"{BASE}/{product.id}/images"
+    png = {**admin, "Content-Type": "image/png"}
+
+    assert (await client.post(f"{url}/sub_images", content=b"x", headers={**admin, "Content-Type": "text/plain"})).status_code == 415
+    assert (await client.post(f"{url}/sub_images", content=b"", headers=png)).status_code == 422
+    assert (await client.post(f"{url}/sku", content=b"x", headers=png)).status_code == 422
+    assert (await client.post(f"{url}/three_view_reference_images", content=b"x", headers=png)).status_code == 422
+    assert (await client.post(f"{BASE}/999999/images/sub_images", content=b"x", headers=png)).status_code == 404
+    assert storage.uploaded == []
+
+
+async def test_regenerate_three_view(client, session):
+    admin = await _user(session, "tiktok_admin", superuser=True)
+    product = await _stored_product(
+        session, "GEN-1", view_status="done", gen_status="failed", gen_error="boom",
+        import_trace={"gen": {"input": {}, "output": {}, "error_code": None, "error_message": "boom"}},
+    )
+    url = f"{BASE}/{product.id}/regenerate-three-view"
+
+    response = await client.post(url, headers=admin)
+    assert response.status_code == 200
+    body = response.json()
+    assert (body["gen_status"], body["gen_error"], body["import_trace"]) == ("pending", None, {})
+
+    assert (await client.post(url, headers=admin)).status_code == 409    # 生成中不能重复提交
+    pending_view = await _stored_product(session, "GEN-2", view_status="pending")
+    assert (await client.post(f"{BASE}/{pending_view.id}/regenerate-three-view", headers=admin)).status_code == 409
+
+
 async def test_create_rejects_stored_objects(client, session):
     admin = await _user(session, "tiktok_admin", superuser=True)
     response = await client.post(BASE, json={"sku": "NEW-1", "main_image": tos("amazon/B0Z/01.jpg")}, headers=admin)
@@ -194,8 +266,10 @@ async def test_requires_permission(client, session):
     "override",
     [
         {"sku": ""},
-        {"three_view_images": [ext("1")] * 4},
-        {"three_view_reference_images": [ext("1")] * 4},
+        {"three_view_images": [ext("1"), ext("2")]},
+        {"three_view_reference_images": [ext("main")] * 4},
+        {"three_view_reference_images": [ext("elsewhere")]},
+        {"sub_images": [], "three_view_reference_images": [ext("sub1")]},
         {"sub_images": [{"key": None, "url": "", "type": "external"}]},
         {"sub_images": [{"key": "a.jpg", "url": "https://example.com/a.jpg", "type": "external"}]},
         {"main_image": {"key": None, "url": "https://example.com/a.jpg", "type": "tos"}},

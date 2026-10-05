@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useSessionStore } from '@shared/core'
+import { confirmDialog } from '@shared/ui'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -7,17 +8,25 @@ import {
   createProductMaster,
   EXTERNAL,
   getProductMaster,
+  regenerateThreeView,
   updateProductMaster,
+  uploadProductImage,
+  type ProductImageField,
   type ProductMasterFields,
   type StoredObject,
 } from '../api'
 import ImageUrlList from '../components/ImageUrlList.vue'
 
+/** 传入 id 时以抽屉形式嵌入列表页，保存与取消交给父组件处理 */
+const props = defineProps<{ id?: number }>()
+const emit = defineEmits<{ (e: 'close'): void; (e: 'saved'): void; (e: 'regenerated'): void }>()
+
 const route = useRoute()
 const router = useRouter()
 const session = useSessionStore()
 
-const productId = computed(() => (route.params.id ? Number(route.params.id) : null))
+const inDrawer = computed(() => props.id !== undefined)
+const productId = computed(() => props.id ?? (route.params.id ? Number(route.params.id) : null))
 const createdBy = ref<number | null>(null)
 
 const isOwner = computed(() => {
@@ -65,6 +74,44 @@ function cleanImages(images: StoredObject[]): StoredObject[] {
 }
 const saving = ref(false)
 
+/** 三视图参考图只能从主图、副图中选择 */
+const referenceOptions = computed(() =>
+  cleanImages([...mainImages.value, ...form.sub_images]).filter((image) => image.url),
+)
+
+function sameImage(a: StoredObject, b: StoredObject): boolean {
+  return a.type === b.type && a.key === b.key && a.url === b.url
+}
+
+/** 新建的商品还没有 id，保存后才能上传 */
+function uploader(field: ProductImageField): ((file: File) => Promise<StoredObject>) | undefined {
+  const id = productId.value
+  return id === null ? undefined : (file) => uploadProductImage(id, field, file)
+}
+
+const notice = ref('')
+
+async function regenerate(): Promise<void> {
+  const id = productId.value
+  if (id === null) return
+  const confirmed = await confirmDialog({
+    title: '重新生成三视图',
+    message: '将按已保存的三视图参考图在后台重新生成，完成后替换现有三视图。未保存的参考图修改不会生效。',
+    type: 'info',
+    confirmText: '重新生成',
+    cancelText: '取消',
+  })
+  if (!confirmed) return
+  try {
+    await regenerateThreeView(id)
+    error.value = ''
+    notice.value = '已提交重新生成，进度可在列表的导入状态中查看'
+    emit('regenerated')
+  } catch (e) {
+    error.value = (e as Error).message
+  }
+}
+
 onMounted(async () => {
   if (productId.value === null) return
   try {
@@ -81,18 +128,24 @@ onMounted(async () => {
 
 async function submit(): Promise<void> {
   if (!editable.value) return
+  const fields: ProductMasterFields = { ...form, sku: form.sku.trim() }
+  for (const key of TEXT_FIELDS) fields[key] = form[key]?.trim() || null
+  for (const key of IMAGE_FIELDS) fields[key] = cleanImages(form[key])
+  fields.main_image = cleanImages(mainImages.value)[0] ?? null
+  const candidates = [...(fields.main_image ? [fields.main_image] : []), ...fields.sub_images]
+  if (fields.three_view_reference_images.some((ref) => !candidates.some((image) => sameImage(ref, image)))) {
+    error.value = '三视图参考图只能从主图或副图中选择，请重新编辑参考图'
+    return
+  }
   saving.value = true
   try {
-    const fields: ProductMasterFields = { ...form, sku: form.sku.trim() }
-    for (const key of TEXT_FIELDS) fields[key] = form[key]?.trim() || null
-    for (const key of IMAGE_FIELDS) fields[key] = cleanImages(form[key])
-    fields.main_image = cleanImages(mainImages.value)[0] ?? null
     if (productId.value === null) {
       await createProductMaster(fields)
     } else {
       await updateProductMaster(productId.value, fields)
     }
-    await router.push('/tiktok_studio/product-masters')
+    if (inDrawer.value) emit('saved')
+    else await router.push('/tiktok_studio/product-masters')
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -102,11 +155,11 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <div class="form-container">
+  <div class="form-container" :class="{ 'in-drawer': inDrawer }">
     <!-- 面包屑与页头 -->
     <div class="form-header">
       <div class="header-titles">
-        <div class="breadcrumb">
+        <div v-if="!inDrawer" class="breadcrumb">
           <RouterLink to="/" class="breadcrumb-item">应用广场</RouterLink>
           <span class="breadcrumb-separator">/</span>
           <RouterLink to="/tiktok_studio/product-masters" class="breadcrumb-item">商品资产库</RouterLink>
@@ -116,14 +169,17 @@ async function submit(): Promise<void> {
         <div class="title-with-badge">
           <h1>{{ productId === null ? '新建商品资产' : (editable ? `编辑商品 #${productId}` : `查看商品 #${productId}`) }}</h1>
           <span v-if="productId !== null && !editable" class="badge-readonly">只读浏览模式</span>
+          <p class="header-desc">
+            {{ productId !== null && !editable ? '当前商品由其他成员创建，您处于只读查看模式，不可修改内容。' : '维护商品基础信息、卖点描述与主图、副图、三视图等素材资产。' }}
+          </p>
         </div>
-        <p class="header-desc">
-          {{ productId !== null && !editable ? '当前商品由其他成员创建，您处于只读查看模式，不可修改内容。' : '维护商品基础信息、卖点描述与主图、副图、三视图等素材资产。' }}
-        </p>
       </div>
 
       <div class="header-actions">
-        <RouterLink to="/tiktok_studio/product-masters" class="btn-secondary">
+        <button v-if="inDrawer" type="button" class="btn-secondary" @click="emit('close')">
+          {{ editable ? '取消' : '关闭' }}
+        </button>
+        <RouterLink v-else to="/tiktok_studio/product-masters" class="btn-secondary">
           返回列表
         </RouterLink>
         <button
@@ -144,6 +200,8 @@ async function submit(): Promise<void> {
       </svg>
       <span>{{ error }}</span>
     </div>
+
+    <div v-if="notice" class="notice-banner">{{ notice }}</div>
 
     <!-- 表单卡片 -->
     <form id="product-form" class="form-card" @submit.prevent="submit">
@@ -208,28 +266,38 @@ async function submit(): Promise<void> {
           <div class="form-group inline col-span-2 align-start">
             <label class="form-label">主图</label>
             <div class="form-control-wrap">
-              <ImageUrlList v-model="mainImages" :max="1" />
+              <ImageUrlList v-model="mainImages" :max="1" :upload="uploader('main_image')" />
             </div>
           </div>
 
           <div class="form-group inline col-span-2 align-start">
             <label class="form-label">副图</label>
             <div class="form-control-wrap">
-              <ImageUrlList v-model="form.sub_images" />
+              <ImageUrlList v-model="form.sub_images" :upload="uploader('sub_images')" />
             </div>
           </div>
 
           <div class="form-group inline col-span-2 align-start">
             <label class="form-label">三视图</label>
             <div class="form-control-wrap">
-              <ImageUrlList v-model="form.three_view_images" :max="3" />
+              <ImageUrlList
+                v-model="form.three_view_images"
+                :max="1"
+                :image-height="120"
+                :upload="uploader('three_view_images')"
+                :regenerate="productId === null ? undefined : regenerate"
+              />
             </div>
           </div>
 
           <div class="form-group inline col-span-2 align-start">
             <label class="form-label">三视图参考图</label>
             <div class="form-control-wrap">
-              <ImageUrlList v-model="form.three_view_reference_images" :max="3" />
+              <ImageUrlList
+                v-model="form.three_view_reference_images"
+                :max="3"
+                :options="referenceOptions"
+              />
             </div>
           </div>
         </div>
@@ -258,6 +326,15 @@ async function submit(): Promise<void> {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+}
+
+.in-drawer .form-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: 0 calc(-1 * var(--space-md));
+  border-width: 0 0 1px;
+  border-radius: 0;
 }
 
 .header-titles {
@@ -293,8 +370,13 @@ async function submit(): Promise<void> {
 
 .title-with-badge {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.title-with-badge .badge-readonly {
+  align-self: center;
 }
 
 .title-with-badge h1,
@@ -399,6 +481,15 @@ async function submit(): Promise<void> {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
+}
+
+.notice-banner {
+  padding: 12px 16px;
+  background: var(--color-primary-light);
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--radius);
+  color: var(--color-primary);
+  font-size: 13px;
 }
 
 /* 表单卡片 */
