@@ -8,7 +8,7 @@ import pytest
 
 from platforms.llm import LLMError
 from platforms.tools import ToolDeps, ToolError, ToolSettings, platform_tools
-from platforms.tools.view_select import (
+from platforms.tools.view_select_tool import (
     ViewSelectTool,
     parse_view_analysis,
     text_facts,

@@ -3,7 +3,7 @@
 platform_tools 登记平台自带的通用 Tool；模块用 platform_tools.extend({...}) 追加本模块特有的 Tool。
 """
 
-from platforms.tools.amazon_crawler import AmazonCrawlerTool
+from platforms.tools.amazon_crawler_tool import AmazonCrawlerTool
 from platforms.tools.base import (
     Tool,
     ToolDeps,
@@ -13,7 +13,7 @@ from platforms.tools.base import (
     retry_async,
 )
 from platforms.tools.registry import ToolFactory, ToolRegistry, require
-from platforms.tools.view_select import ViewSelectTool
+from platforms.tools.view_select_tool import ViewSelectTool
 
 platform_tools = ToolRegistry({
     AmazonCrawlerTool.name: lambda deps: AmazonCrawlerTool(storage=require(deps.storage, "storage")),

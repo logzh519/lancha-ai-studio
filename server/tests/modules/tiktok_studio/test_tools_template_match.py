@@ -4,7 +4,7 @@ import pytest
 
 from modules.tiktok_studio import service
 from modules.tiktok_studio.schemas import ScriptTemplateFields
-from modules.tiktok_studio.tools.template_match import TemplateMatchTool
+from modules.tiktok_studio.tools.template_match_tool import TemplateMatchTool
 from platforms.tools import ToolSettings
 
 pytestmark = pytest.mark.db

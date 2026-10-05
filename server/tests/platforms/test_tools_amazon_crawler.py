@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from platforms.tools import ToolDeps, ToolSettings, platform_tools
-from platforms.tools.amazon_crawler import AmazonCrawlerTool
+from platforms.tools.amazon_crawler_tool import AmazonCrawlerTool
 from platforms.tools.amazon_page import PageImage, parse_product_page
 
 SETTINGS = ToolSettings(timeout=5.0, trace_id="trace-1")

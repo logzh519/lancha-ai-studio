@@ -5,9 +5,9 @@ from types import SimpleNamespace
 import pytest
 
 from modules.tiktok_studio import tools
-from modules.tiktok_studio.tools.template_match import TemplateMatchTool
-from platforms.tools.amazon_crawler import AmazonCrawlerTool
-from platforms.tools.view_select import ViewSelectTool
+from modules.tiktok_studio.tools.template_match_tool import TemplateMatchTool
+from platforms.tools.amazon_crawler_tool import AmazonCrawlerTool
+from platforms.tools.view_select_tool import ViewSelectTool
 
 
 @pytest.mark.db

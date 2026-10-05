@@ -8,7 +8,7 @@
 本模块新增 Tool 时在 extend 里加一行；工厂只挑该 Tool 真正需要的依赖，保证依赖关系写在构造签名上。
 """
 
-from modules.tiktok_studio.tools.template_match import TemplateMatchTool
+from modules.tiktok_studio.tools.template_match_tool import TemplateMatchTool
 from platforms.tools import (
     Tool,
     ToolDeps,
