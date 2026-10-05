@@ -9,6 +9,7 @@
 """
 
 from modules.tiktok_studio.tools.template_match_tool import TemplateMatchTool
+from modules.tiktok_studio.tools.three_view_gen_tool import ThreeViewGenTool
 from platforms.tools import (
     Tool,
     ToolDeps,
@@ -16,10 +17,14 @@ from platforms.tools import (
     ToolResult,
     ToolSettings,
     platform_tools,
+    require,
 )
 
 _REGISTRY = platform_tools.extend({
     TemplateMatchTool.name: lambda deps: TemplateMatchTool(session=deps.session),
+    ThreeViewGenTool.name: lambda deps: ThreeViewGenTool(
+        llm=require(deps.llm, "llm"), storage=require(deps.storage, "storage"),
+    ),
 })
 
 build = _REGISTRY.build
