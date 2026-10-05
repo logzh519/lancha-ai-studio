@@ -12,12 +12,14 @@ from platforms.tools.base import (
     ToolSettings,
     retry_async,
 )
+from platforms.tools.product_lookup_tool import ProductLookupTool
 from platforms.tools.registry import ToolFactory, ToolRegistry, require
 from platforms.tools.view_select_tool import ViewSelectTool
 
 platform_tools = ToolRegistry({
     AmazonCrawlerTool.name: lambda deps: AmazonCrawlerTool(storage=require(deps.storage, "storage")),
     ViewSelectTool.name: lambda deps: ViewSelectTool(llm=require(deps.llm, "llm")),
+    ProductLookupTool.name: lambda deps: ProductLookupTool(),
 })
 
 __all__ = [

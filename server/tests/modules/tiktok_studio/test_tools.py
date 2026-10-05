@@ -7,6 +7,7 @@ import pytest
 from modules.tiktok_studio import tools
 from modules.tiktok_studio.tools.template_match_tool import TemplateMatchTool
 from platforms.tools.amazon_crawler_tool import AmazonCrawlerTool
+from platforms.tools.product_lookup_tool import ProductLookupTool
 from platforms.tools.view_select_tool import ViewSelectTool
 
 
@@ -27,3 +28,4 @@ def test_platform_tools_are_available():
     deps = tools.ToolDeps(session=None, storage=SimpleNamespace(), llm=SimpleNamespace())
     assert isinstance(tools.build("amazon_crawler", deps), AmazonCrawlerTool)
     assert isinstance(tools.build("view_select", deps), ViewSelectTool)
+    assert isinstance(tools.build("product_lookup", deps), ProductLookupTool)
