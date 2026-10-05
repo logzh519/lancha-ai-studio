@@ -65,11 +65,24 @@ export interface ProductMasterFields {
   three_view_reference_images: string[]
 }
 
+export type ImportStatus = 'pending' | 'running' | 'done' | 'failed'
+
+export const IMPORT_STATUS_LABELS: Record<ImportStatus, string> = {
+  pending: '等待',
+  running: '进行中',
+  done: '完成',
+  failed: '失败',
+}
+
 export type ProductMasterSummary = Pick<
   ProductMasterFields,
   'sku' | 'asin' | 'color' | 'store' | 'pid' | 'category' | 'main_image_url'
 > & {
   id: number
+  crawl_status: ImportStatus | null
+  crawl_error: string | null
+  view_status: ImportStatus | null
+  view_error: string | null
   created_by: number | null
   created_at: string
   updated_at: string
@@ -99,3 +112,15 @@ export const updateProductMaster = (id: number, fields: ProductMasterFields) =>
   request<ProductMaster>(`${PRODUCT_BASE}/${id}`, { method: 'PUT', body: JSON.stringify(fields) })
 
 export const deleteProductMaster = (id: number) => request<void>(`${PRODUCT_BASE}/${id}`, { method: 'DELETE' })
+
+export interface ProductImportResult {
+  created: ProductMasterSummary[]
+  skipped: number
+  failed: { sku: string; message: string }[]
+}
+
+export const importProductMasters = (skus: string[]) =>
+  request<ProductImportResult>(`${PRODUCT_BASE}/import`, { method: 'POST', body: JSON.stringify({ skus }) })
+
+export const retryProductImport = (id: number) =>
+  request<ProductMaster>(`${PRODUCT_BASE}/${id}/retry-import`, { method: 'POST' })

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 Category = Literal["all", "top", "bottom"]
 Status = Literal["formal", "test"]
+ImportStatus = Literal["pending", "running", "done", "failed"]
 ImageUrl = Annotated[str, Field(min_length=1, max_length=2048)]
 
 

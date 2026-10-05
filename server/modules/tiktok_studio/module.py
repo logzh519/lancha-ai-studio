@@ -1,6 +1,7 @@
 """模块注册入口：模块元信息的唯一来源。"""
 
 from modules.tiktok_studio.api import router
+from modules.tiktok_studio.worker import LOOPS
 from platforms.contract import MenuDef, ModuleSpec, PermissionDef
 
 MODULE = ModuleSpec(
@@ -34,4 +35,5 @@ MODULE = ModuleSpec(
             permission="tiktok_studio:product_master:view",
         ),
     ),
+    loops=LOOPS,
 )

@@ -63,6 +63,11 @@ class ProductMaster(Base):
     sub_images: Mapped[list[str]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
     three_view_images: Mapped[list[str]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
     three_view_reference_images: Mapped[list[str]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    # 自动导入的两个后台阶段，取值见 schemas.ImportStatus；手工新建的商品为 None
+    crawl_status: Mapped[str | None] = mapped_column(String(16))
+    crawl_error: Mapped[str | None] = mapped_column(Text)
+    view_status: Mapped[str | None] = mapped_column(String(16))
+    view_error: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey(AppUser.id, ondelete="SET NULL")
     )

@@ -1,11 +1,23 @@
 <script setup lang="ts">
 import { useSessionStore } from '@shared/core'
-import { confirmDialog } from '@shared/ui'
-import { computed, onMounted, ref } from 'vue'
+import { ConfirmDialog, confirmDialog } from '@shared/ui'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
-import { deleteProductMaster, listProductMasters, type ProductMasterSummary } from '../api'
+import {
+  deleteProductMaster,
+  IMPORT_STATUS_LABELS,
+  importProductMasters,
+  type ImportStatus,
+  listProductMasters,
+  type ProductMasterSummary,
+  retryProductImport,
+} from '../api'
 
 const PAGE_SIZE = 20
+const MAX_IMPORT_SKUS = 50
+const POLL_INTERVAL_MS = 5000
+const PREVIEW_DELAY_MS = 500
+const PREVIEW_MAX_HEIGHT = 492
 
 const session = useSessionStore()
 
@@ -19,8 +31,108 @@ const jumpInput = ref(1)
 const loading = ref(true)
 const initialLoaded = ref(false)
 const deletingId = ref<number | null>(null)
+const retryingId = ref<number | null>(null)
+const importOpen = ref(false)
+const importInput = ref('')
+const importError = ref('')
+const importNotice = ref('')
+const importing = ref(false)
+let pollTimer: ReturnType<typeof setTimeout> | undefined
+const preview = ref<{ url: string; top: number; left: number } | null>(null)
+let previewTimer: ReturnType<typeof setTimeout> | undefined
+
+function schedulePreview(event: MouseEvent, url: string): void {
+  clearTimeout(previewTimer)
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  previewTimer = setTimeout(() => {
+    const centered = rect.top + rect.height / 2 - PREVIEW_MAX_HEIGHT / 2
+    const top = Math.max(8, Math.min(centered, window.innerHeight - PREVIEW_MAX_HEIGHT - 8))
+    preview.value = { url, top, left: rect.right + 12 }
+  }, PREVIEW_DELAY_MS)
+}
+
+function hidePreview(): void {
+  clearTimeout(previewTimer)
+  preview.value = null
+}
 
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
+
+const importSkus = computed(() => [
+  ...new Set(
+    importInput.value
+      .split(/[;；,，\s]+/)
+      .map((sku) => sku.trim().toUpperCase())
+      .filter(Boolean),
+  ),
+])
+
+function statusLabel(status: ImportStatus | null): string {
+  return status ? IMPORT_STATUS_LABELS[status] : '—'
+}
+
+function isImportBusy(product: ProductMasterSummary): boolean {
+  return [product.crawl_status, product.view_status].some((s) => s === 'pending' || s === 'running')
+}
+
+function hasImportFailure(product: ProductMasterSummary): boolean {
+  return product.crawl_status === 'failed' || product.view_status === 'failed'
+}
+
+function schedulePoll(): void {
+  clearTimeout(pollTimer)
+  if (products.value.some(isImportBusy)) {
+    pollTimer = setTimeout(() => load(page.value), POLL_INTERVAL_MS)
+  }
+}
+
+function openImport(): void {
+  importInput.value = ''
+  importError.value = ''
+  importOpen.value = true
+}
+
+async function submitImport(): Promise<void> {
+  if (importing.value) return
+  const skus = importSkus.value
+  if (!skus.length) {
+    importError.value = '请至少填写一个货号'
+    return
+  }
+  if (skus.length > MAX_IMPORT_SKUS) {
+    importError.value = `单次最多导入 ${MAX_IMPORT_SKUS} 个货号，当前 ${skus.length} 个`
+    return
+  }
+  importing.value = true
+  importError.value = ''
+  try {
+    const result = await importProductMasters(skus)
+    const parts = [`新增 ${result.created.length} 条`, `已存在跳过 ${result.skipped} 条`]
+    if (result.failed.length) parts.push(`失败 ${result.failed.length} 个：${result.failed.map((f) => f.message).join('；')}`)
+    importNotice.value = `导入完成：${parts.join('，')}。详情与三视图将在后台补全。`
+    importOpen.value = false
+    keywordInput.value = ''
+    keyword.value = ''
+    await load(1)
+  } catch (e) {
+    importError.value = (e as Error).message
+  } finally {
+    importing.value = false
+  }
+}
+
+async function retry(product: ProductMasterSummary): Promise<void> {
+  if (retryingId.value !== null) return
+  retryingId.value = product.id
+  try {
+    await retryProductImport(product.id)
+    await load(page.value)
+  } catch (e) {
+    error.value = (e as Error).message
+  } finally {
+    retryingId.value = null
+  }
+}
 
 function isOwner(product: ProductMasterSummary): boolean {
   if (session.user?.superuser) return true
@@ -38,6 +150,7 @@ function jump(): Promise<void> {
 }
 
 async function load(target: number): Promise<void> {
+  clearTimeout(pollTimer)
   loading.value = true
   try {
     const result = await listProductMasters(target, PAGE_SIZE, keyword.value)
@@ -51,6 +164,7 @@ async function load(target: number): Promise<void> {
     page.value = target
     jumpInput.value = target
     error.value = ''
+    schedulePoll()
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -83,6 +197,10 @@ async function remove(product: ProductMasterSummary): Promise<void> {
 }
 
 onMounted(() => load(1))
+onUnmounted(() => {
+  clearTimeout(pollTimer)
+  clearTimeout(previewTimer)
+})
 </script>
 
 <template>
@@ -123,6 +241,19 @@ onMounted(() => load(1))
           <button type="submit" class="btn-search">搜索</button>
         </form>
 
+        <button
+          v-permission="'tiktok_studio:product_master:create'"
+          type="button"
+          class="btn-secondary"
+          @click="openImport"
+        >
+          <svg viewBox="0 0 20 20" fill="currentColor" class="btn-icon">
+            <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z" />
+            <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
+          </svg>
+          <span>批量导入</span>
+        </button>
+
         <RouterLink
           v-permission="'tiktok_studio:product_master:create'"
           to="/tiktok_studio/product-masters/new"
@@ -143,9 +274,14 @@ onMounted(() => load(1))
       <span>{{ error }}</span>
     </div>
 
+    <div v-if="importNotice" class="notice-banner">
+      <span>{{ importNotice }}</span>
+      <button type="button" class="notice-close" aria-label="关闭" @click="importNotice = ''">×</button>
+    </div>
+
     <!-- 表格卡片容器 -->
     <div class="table-card">
-      <div class="table-scroll">
+      <div class="table-scroll" @scroll="hidePreview">
         <table class="data-table">
           <thead>
             <tr>
@@ -157,13 +293,14 @@ onMounted(() => load(1))
               <th>销售店铺</th>
               <th>PID</th>
               <th>类目</th>
+              <th>导入状态</th>
               <th>更新时间</th>
-              <th style="width: 140px;">操作</th>
+              <th style="width: 160px;">操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loading && !products.length">
-              <td colspan="10" class="table-loading">
+              <td colspan="11" class="table-loading">
                 <div class="loading-wrap">
                   <span class="spinner"></span>
                   <span>正在加载商品列表...</span>
@@ -179,6 +316,8 @@ onMounted(() => load(1))
                   target="_blank"
                   rel="noopener"
                   class="thumb"
+                  @mouseenter="schedulePreview($event, product.main_image_url)"
+                  @mouseleave="hidePreview"
                 >
                   <img :src="product.main_image_url" alt="" />
                 </a>
@@ -194,9 +333,38 @@ onMounted(() => load(1))
               <td class="text-center">{{ product.store || '—' }}</td>
               <td class="text-center font-mono">{{ product.pid || '—' }}</td>
               <td class="text-center">{{ product.category || '—' }}</td>
+              <td class="text-center">
+                <div v-if="product.crawl_status" class="import-status">
+                  <span
+                    class="status-tag"
+                    :class="`is-${product.crawl_status}`"
+                    :title="product.crawl_error || ''"
+                  >
+                    详情 · {{ statusLabel(product.crawl_status) }}
+                  </span>
+                  <span
+                    class="status-tag"
+                    :class="`is-${product.view_status}`"
+                    :title="product.view_error || ''"
+                  >
+                    三视图 · {{ statusLabel(product.view_status) }}
+                  </span>
+                </div>
+                <span v-else class="text-weak">—</span>
+              </td>
               <td class="text-center text-weak text-sm">{{ new Date(product.updated_at).toLocaleString() }}</td>
               <td class="table-actions text-center">
                 <template v-if="isOwner(product)">
+                  <button
+                    v-if="hasImportFailure(product)"
+                    v-permission="'tiktok_studio:product_master:create'"
+                    type="button"
+                    class="action-link"
+                    :disabled="retryingId !== null"
+                    @click="retry(product)"
+                  >
+                    {{ retryingId === product.id ? '重试中...' : '重试' }}
+                  </button>
                   <RouterLink
                     :to="`/tiktok_studio/product-masters/${product.id}`"
                     class="action-link"
@@ -225,7 +393,7 @@ onMounted(() => load(1))
               </td>
             </tr>
             <tr v-if="initialLoaded && !loading && !products.length && !error">
-              <td colspan="10" class="table-empty">
+              <td colspan="11" class="table-empty">
                 <div class="empty-wrap">
                   <span class="empty-icon-text">📦</span>
                   <p>{{ keyword ? '没有匹配的商品' : '当前暂无商品资产' }}</p>
@@ -280,6 +448,40 @@ onMounted(() => load(1))
         </form>
       </footer>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="preview"
+        class="image-preview"
+        :style="{ top: `${preview.top}px`, left: `${preview.left}px` }"
+      >
+        <img :src="preview.url" alt="" />
+      </div>
+    </Teleport>
+
+    <ConfirmDialog
+      v-model:open="importOpen"
+      title="批量导入商品"
+      type="info"
+      confirm-text="开始导入"
+      :confirm-loading="importing"
+      :close-on-click-overlay="false"
+      @confirm="submitImport"
+    >
+      <div class="import-form">
+        <textarea
+          v-model="importInput"
+          rows="6"
+          class="import-textarea"
+          placeholder="输入产品货号，多个用分号、逗号或换行分隔，如：WTK9167; WTC2835"
+          :disabled="importing"
+        ></textarea>
+        <p class="import-hint">
+          已识别 {{ importSkus.length }} 个货号（单次最多 {{ MAX_IMPORT_SKUS }} 个）。基础信息立即入库，详情、主副图与三视图在后台补全。
+        </p>
+        <p v-if="importError" class="import-error">{{ importError }}</p>
+      </div>
+    </ConfirmDialog>
   </div>
 </template>
 
@@ -583,19 +785,38 @@ onMounted(() => load(1))
 /* 主图缩略图 */
 .thumb {
   display: inline-block;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 64px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-surface-subtle);
+  background: #ffffff;
   overflow: hidden;
   vertical-align: middle;
+  cursor: zoom-in;
 }
 
 .thumb img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+}
+
+.image-preview {
+  position: fixed;
+  z-index: 9000;
+  padding: 6px;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+  pointer-events: none;
+}
+
+.image-preview img {
+  display: block;
+  max-width: 360px;
+  max-height: 480px;
+  object-fit: contain;
 }
 
 .table-actions {
@@ -754,5 +975,132 @@ onMounted(() => load(1))
   border-radius: var(--radius-sm);
   text-align: center;
   font-size: 12px;
+}
+
+/* 批量导入 */
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--radius);
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-secondary:hover {
+  background: var(--color-surface);
+}
+
+.notice-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--color-primary-light);
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--radius);
+  color: var(--color-primary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.notice-banner span {
+  flex: 1;
+  word-break: break-word;
+}
+
+.notice-close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.import-status {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-subtle);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.status-tag.is-running {
+  background: var(--color-primary-light);
+  border-color: var(--color-primary-border);
+  color: var(--color-primary);
+}
+
+.status-tag.is-done {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.status-tag.is-failed {
+  background: var(--color-danger-light);
+  border-color: #fecaca;
+  color: var(--color-danger-text);
+  cursor: help;
+}
+
+.import-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  white-space: normal;
+}
+
+.import-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  resize: vertical;
+  outline: none;
+}
+
+.import-textarea:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.import-hint,
+.import-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.import-hint {
+  color: var(--color-text-weak);
+}
+
+.import-error {
+  color: var(--color-danger-text);
 }
 </style>

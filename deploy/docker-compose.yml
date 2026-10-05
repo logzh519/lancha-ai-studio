@@ -77,6 +77,20 @@ services:
   #     migrate:
   #       condition: service_completed_successfully
 
+  worker-tiktok_studio:
+    build: *server-build
+    command: ["python", "main.py", "worker", "tiktok_studio"]
+    restart: unless-stopped
+    stop_grace_period: 60s
+    environment:
+      <<: *backend-env
+      POSTGRES_POOL_SIZE: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
   web:
     build:
       context: ..

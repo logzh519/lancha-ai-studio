@@ -4,15 +4,17 @@
 """
 
 from datetime import datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from modules.tiktok_studio import service
+from modules.tiktok_studio import importing, service
 from modules.tiktok_studio.models import ProductMaster, ScriptTemplate
 from modules.tiktok_studio.schemas import (
     Category,
+    ImportStatus,
     ProductMasterFields,
     ScriptTemplateFields,
     Status,
@@ -122,6 +124,10 @@ class ProductMasterSummary(BaseModel):
     pid: str | None
     category: str | None
     main_image_url: str | None
+    crawl_status: ImportStatus | None
+    crawl_error: str | None
+    view_status: ImportStatus | None
+    view_error: str | None
     created_by: int | None
     created_at: datetime
     updated_at: datetime
@@ -138,6 +144,21 @@ class ProductMasterOut(ProductMasterSummary):
     sub_images: list[str]
     three_view_images: list[str]
     three_view_reference_images: list[str]
+
+
+class ProductImportRequest(BaseModel):
+    skus: list[Annotated[str, Field(max_length=64)]] = Field(min_length=1, max_length=50)
+
+
+class ProductImportFailure(BaseModel):
+    sku: str
+    message: str
+
+
+class ProductImportResult(BaseModel):
+    created: list[ProductMasterSummary]
+    skipped: int
+    failed: list[ProductImportFailure]
 
 
 async def _get_product_or_404(session: AsyncSession, product_id: int) -> ProductMaster:
@@ -180,6 +201,37 @@ async def create_product_master(
     session: AsyncSession = Depends(get_session),
 ):
     product = await service.create_product_master(session, payload, created_by=principal.user_id)
+    await session.commit()
+    return ProductMasterOut.model_validate(product, from_attributes=True)
+
+
+@router.post("/product-masters/import", response_model=ProductImportResult)
+async def import_product_masters(
+    payload: ProductImportRequest,
+    principal: Principal = Depends(require("tiktok_studio:product_master:create")),
+    session: AsyncSession = Depends(get_session),
+):
+    skus = importing.normalize_skus(payload.skus)
+    if not skus:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "请至少填写一个货号")
+    result = await importing.import_skus(session, skus, created_by=principal.user_id)
+    await session.commit()
+    return ProductImportResult(
+        created=[ProductMasterSummary.model_validate(p, from_attributes=True) for p in result.created],
+        skipped=result.skipped,
+        failed=[ProductImportFailure(sku=f.sku, message=f.message) for f in result.failed],
+    )
+
+
+@router.post(
+    "/product-masters/{product_id}/retry-import",
+    response_model=ProductMasterOut,
+    dependencies=[Depends(require("tiktok_studio:product_master:create"))],
+)
+async def retry_product_import(product_id: int, session: AsyncSession = Depends(get_session)):
+    product = await _get_product_or_404(session, product_id)
+    if not await service.retry_product_import(session, product):
+        raise HTTPException(status.HTTP_409_CONFLICT, f"商品 {product_id} 没有失败的导入阶段")
     await session.commit()
     return ProductMasterOut.model_validate(product, from_attributes=True)
 
