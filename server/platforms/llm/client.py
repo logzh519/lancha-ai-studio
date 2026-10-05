@@ -28,13 +28,20 @@ def _resolve_config(
         api_key = settings.lch_api_key
         model = settings.lch_llm_model
         image_model = settings.lch_image_model
+    elif provider == "lch_tk":
+        if protocol == "anthropic":
+            raise LLMError("朗驰 TK（lch_tk）仅支持 openai 协议")
+        base_url = settings.lch_tk_openai_base_url
+        api_key = settings.lch_tk_api_key
+        model = settings.lch_tk_llm_model
+        image_model = None
     elif provider in (None, "ali"):
         base_url = settings.ali_anthropic_base_url if protocol == "anthropic" else settings.ali_openai_base_url
         api_key = settings.ali_api_key
         model = settings.ali_test_llm_model
         image_model = None
     else:
-        raise LLMError(f"未知 provider {provider!r}，支持 ali / lch")
+        raise LLMError(f"未知 provider {provider!r}，支持 ali / lch / lch_tk")
 
     config: dict[str, Any] = {
         "base_url": base_url,

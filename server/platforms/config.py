@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     lch_llm_model: str = "gpt-5.6-sol"
     lch_image_model: str = "gpt-image-2"
 
+    # LLM：朗驰 TK（OpenAI 官方接口，商品图视角识别等视觉理解用）
+    lch_tk_api_key: str = ""
+    lch_tk_openai_base_url: str = "https://api.openai.com/v1"
+    lch_tk_llm_model: str = "gpt-4.1-mini"
+
     # 默认对象存储服务：tos / obs，留空则使用 tos
     storage_provider: str = "tos"
 
