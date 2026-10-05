@@ -12,7 +12,7 @@
 
 from collections.abc import Callable
 
-from modules.tiktok_studio.tools.amazon_scrape import AmazonScrapeTool
+from modules.tiktok_studio.tools.amazon_crawler import AmazonCrawlerTool
 from modules.tiktok_studio.tools.base import (
     Tool,
     ToolDeps,
@@ -33,7 +33,7 @@ def _require[T](value: T | None, name: str) -> T:
 # 工具注册工厂：按名字构造，不 import 具体 Tool 类
 _FACTORIES: dict[str, Callable[[ToolDeps], Tool]] = {
     TemplateMatchTool.name: lambda deps: TemplateMatchTool(session=deps.session),
-    AmazonScrapeTool.name: lambda deps: AmazonScrapeTool(storage=_require(deps.storage, "storage")),
+    AmazonCrawlerTool.name: lambda deps: AmazonCrawlerTool(storage=_require(deps.storage, "storage")),
     ViewSelectTool.name: lambda deps: ViewSelectTool(llm=_require(deps.llm, "llm")),
 }
 

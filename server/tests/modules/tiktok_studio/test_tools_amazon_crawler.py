@@ -1,4 +1,4 @@
-"""amazon_scrape：页面解析规则与 Tool 行为。HTTP 走 MockTransport，存储用假实现，不打真实网络。"""
+"""amazon_crawler：页面解析规则与 Tool 行为。HTTP 走 MockTransport，存储用假实现，不打真实网络。"""
 
 from types import SimpleNamespace
 
@@ -6,8 +6,8 @@ import httpx
 import pytest
 
 from modules.tiktok_studio import tools
+from modules.tiktok_studio.tools.amazon_crawler import AmazonCrawlerTool
 from modules.tiktok_studio.tools.amazon_page import PageImage, parse_product_page
-from modules.tiktok_studio.tools.amazon_scrape import AmazonScrapeTool
 from modules.tiktok_studio.tools.base import ToolSettings
 
 SETTINGS = ToolSettings(timeout=5.0, trace_id="trace-1")
@@ -71,7 +71,7 @@ class FakeStorage:
         return SimpleNamespace(key=key, url=f"https://cdn.test/{key}")
 
 
-def make_tool(storage: FakeStorage, pages: dict[str, httpx.Response | list[httpx.Response]]) -> AmazonScrapeTool:
+def make_tool(storage: FakeStorage, pages: dict[str, httpx.Response | list[httpx.Response]]) -> AmazonCrawlerTool:
     """pages 的值为列表时按顺序依次返回，用来模拟「先失败后成功」；requests 记录每个 URL 的请求次数。"""
     requests: dict[str, int] = {}
 
@@ -81,7 +81,7 @@ def make_tool(storage: FakeStorage, pages: dict[str, httpx.Response | list[httpx
         response = pages.get(url, httpx.Response(404))
         return response.pop(0) if isinstance(response, list) else response
 
-    tool = AmazonScrapeTool(storage=storage, transport=httpx.MockTransport(handler))
+    tool = AmazonCrawlerTool(storage=storage, transport=httpx.MockTransport(handler))
     tool.retry_delays = (0, 0)
     tool.requests = requests
     return tool
@@ -189,6 +189,6 @@ async def test_scrape_rejects_invalid_asin():
 
 def test_build_requires_storage():
     with pytest.raises(ValueError, match="storage"):
-        tools.build("amazon_scrape", tools.ToolDeps(session=None))
-    tool = tools.build("amazon_scrape", tools.ToolDeps(session=None, storage=FakeStorage()))
-    assert isinstance(tool, AmazonScrapeTool)
+        tools.build("amazon_crawler", tools.ToolDeps(session=None))
+    tool = tools.build("amazon_crawler", tools.ToolDeps(session=None, storage=FakeStorage()))
+    assert isinstance(tool, AmazonCrawlerTool)

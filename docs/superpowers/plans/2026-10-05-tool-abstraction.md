@@ -15,7 +15,7 @@
 - 所有命令在 `server/` 目录、已激活 `.venv`（`source .venv/bin/activate`）下执行。
 - 不涉及表结构变更，**不生成任何 Alembic 迁移**。
 - 注释、文档字符串、错误信息一律中文，风格与现有代码一致；不写解释「这次改了什么」的注释。
-- Tool 边界以 `docs/架构规范.md` §3「模块内的 Tool 层」为准：不读写编排状态，不做限流与重试决策，依赖一律构造注入。
+- Tool 边界以 `docs/架构规范.md` §3「模块内的 Tool 层」为准：不读写编排状态，不做限流，瞬时故障可在 Tool 内用 `retry_async` 有限次重试，依赖一律构造注入。
 - 契约字段只在有真实来源时新增。`ToolSettings` 本次只有 `timeout`、`trace_id`；`ToolResult` 本次只有 `success`、`output`、`error_code`、`error_message`。不得添加 `idempotency_key`、`prompt`、`attempt`、`external_calls`、`metrics`。
 - 业务失败抛 `ToolError`；输入校验失败返回 `error_code="invalid_input"`；**其他异常一律不捕获**。
 - `pytest` 的 `asyncio_mode=auto`，异步测试函数不需要 `@pytest.mark.asyncio`。
@@ -183,7 +183,7 @@ class ToolResult:
 
 
 class ToolError(Exception):
-    """业务失败。code 供调用方判定是否可重试，Tool 自己不做重试决策。"""
+    """业务失败。Tool 内部重试耗尽后才抛出，code 供调用方判定是否整体重跑。"""
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)

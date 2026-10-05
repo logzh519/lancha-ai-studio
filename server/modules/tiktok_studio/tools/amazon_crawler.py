@@ -33,7 +33,7 @@ REQUEST_HEADERS = {
 }
 
 
-class AmazonScrapeInput(BaseModel):
+class AmazonCrawlerInput(BaseModel):
     asin: str = Field(pattern=r"^([Bb]0[A-Za-z0-9]{8}|\d{9}[\dXx])$")
 
 
@@ -44,7 +44,7 @@ class ProductImage(BaseModel):
     url: str | None             # 对象存储公开地址；存储 ACL 为 private 时为 None
 
 
-class AmazonScrapeOutput(BaseModel):
+class AmazonCrawlerOutput(BaseModel):
     asin: str
     product_url: str
     title: str | None
@@ -54,19 +54,19 @@ class AmazonScrapeOutput(BaseModel):
     gallery_images: list[ProductImage]
 
 
-class AmazonScrapeTool(Tool[AmazonScrapeInput, AmazonScrapeOutput]):
+class AmazonCrawlerTool(Tool[AmazonCrawlerInput, AmazonCrawlerOutput]):
     """商品页请求失败、被拦截时按 retry_delays 重试，耗尽后以 ToolError 返回。"""
 
-    name = "amazon_scrape"
-    input_model = AmazonScrapeInput
-    output_model = AmazonScrapeOutput
+    name = "amazon_crawler"
+    input_model = AmazonCrawlerInput
+    output_model = AmazonCrawlerOutput
     retry_delays: tuple[float, ...] = (3, 6)
 
     def __init__(self, *, storage: ObjectStorage, transport: httpx.AsyncBaseTransport | None = None) -> None:
         self._storage = storage
         self._transport = transport
 
-    async def run(self, payload: AmazonScrapeInput, settings: ToolSettings) -> AmazonScrapeOutput:
+    async def run(self, payload: AmazonCrawlerInput, settings: ToolSettings) -> AmazonCrawlerOutput:
         asin = payload.asin.upper()
         product_url = f"https://{AMAZON_DOMAIN}/dp/{asin}"
         async with httpx.AsyncClient(
@@ -85,7 +85,7 @@ class AmazonScrapeTool(Tool[AmazonScrapeInput, AmazonScrapeOutput]):
             ))
 
         main = next((image for image in images if image.variant == "MAIN"), None)
-        return AmazonScrapeOutput(
+        return AmazonCrawlerOutput(
             asin=page.asin or asin,
             product_url=product_url,
             title=page.title,

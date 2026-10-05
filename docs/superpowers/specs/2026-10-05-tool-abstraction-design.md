@@ -30,7 +30,7 @@ V4 §5.3 已经定义了 Tool，但那份接口是**相对一个尚不存在的 
 
 - 对象存储、HTTP 客户端、LLM 网关、浏览器池等基础设施服务（没有真实来源前不进 `ToolDeps`）
 - Runner、`node`、`task`、`channel`、租约、`external_call`（V5 阶段 2）
-- `amazon_scrape`、`three_view_gen`、`seedance_generate` 等需要上述基础设施的 Tool
+- `amazon_crawler`、`three_view_gen`、`seedance_generate` 等需要上述基础设施的 Tool
 - ASIN 导入链路本身，不改 `product_master`
 - 把 Tool 抽象提取到 `platforms/`
 
@@ -44,14 +44,15 @@ V5 §1.1 已有结论：平台层不为本模块新增业务能力，`node` / `c
 
 提取到平台层的触发条件：出现第二个模块需要同样的 Tool 机制。届时迁移的只是基类与注册表，没有数据，成本很低。
 
-### 边界沿用 V4，不放松
+### 边界沿用 V4，仅放开瞬时故障重试
 
 | 依赖类型 | 举例 | 是否允许 |
 |---|---|---|
 | 基础设施服务 | 对象存储、HTTP 客户端、LLM 网关 | 允许，必须构造注入 |
 | 业务数据源 | 脚本模板库、商品库、抓取缓存 | 允许，构造注入 |
 | 编排状态 | `task`、`node`、`batch`、`review_action` | **禁止** |
-| 限流与重试决策 | 「要不要退避」「通道还有名额吗」 | **禁止** |
+| 限流决策 | 「通道还有名额吗」「要不要排队」 | **禁止** |
+| 瞬时故障重试 | 网络错误、上游限流或 5xx、模型偶发漏判 | 允许，有限次，统一用 `retry_async` |
 | 自身位置信息 | 「我是第几个节点」「上游是谁」 | **禁止** |
 
 一句话：**Tool 的边界不是「不碰存储」，而是「不碰编排」。**
@@ -92,8 +93,19 @@ V4 写的是 `input_schema` / `output_schema` 两个 JSON Schema dict。本仓�
 最后一条是刻意的。把未预期异常也吞成 `ToolResult` 会让真正的 bug 伪装成一次普通的业务失败；等将来接上
 自动重试，一个空指针会变成反复重试、反复扣费，且在监控上和正常的业务失败无法区分。
 
-`error_code` 只表达业务语义，**Tool 不判断自己是否该被重试**——retryable 的映射由调用方维护，这是 V4 的
-分工。
+### 重试：瞬时故障在 Tool 内有限次重试
+
+哪些失败是瞬时的（网络抖动、被反爬拦截、上游限流或 5xx、视觉模型偶发漏判），只有 Tool 自己最清楚，
+因此由 Tool 内部重试，统一用 `tools/base.py` 的 `retry_async`：
+
+```python
+await retry_async(operation, delays=(2, 5, 10), retry_if=is_transient, label="商品视角识别", trace_id=settings.trace_id)
+```
+
+- `delays` 的长度即最大重试次数，每个 Tool 用类属性 `retry_delays` 声明，测试里可置零。
+- `retry_if` 只对瞬时故障返回真；鉴权失败、商品不存在、输入非法等确定性失败不重试。
+- 重试耗尽后才抛 `ToolError`。此时 `error_code` 仍只表达业务语义，调用方可据此决定是否整体重跑该节点。
+- 未预期异常不进入 `retry_if`，照常向上抛。
 
 ### 依赖注入：工厂注册表
 
@@ -103,7 +115,7 @@ V4 要求「只注入需要的」，即每个 Tool 的 `__init__` 签名各不�
 ```python
 _FACTORIES: dict[str, Callable[[ToolDeps], Tool]] = {
     TemplateMatchTool.name: lambda d: TemplateMatchTool(session=d.session),
-    # 将来：AmazonScrapeTool.name: lambda d: AmazonScrapeTool(storage=d.storage, http=d.http),
+    # 将来：AmazonCrawlerTool.name: lambda d: AmazonCrawlerTool(storage=d.storage, http=d.http),
 }
 ```
 
@@ -137,7 +149,7 @@ class ToolResult:
 
 
 class ToolError(Exception):
-    """业务失败。code 供调用方判定是否可重试，Tool 自己不做重试决策。"""
+    """业务失败。Tool 内部重试耗尽后才抛出，code 供调用方判定是否整体重跑。"""
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
@@ -241,6 +253,7 @@ docs/架构规范.md          新增 Tool 层小节
 | `ToolSettings` 含 `submit_external`、`resume_job_id` | 不含 | V5 §4.7 已用提交-对账两段式取代「Tool 内等待」 |
 | `ToolResult` 含 `external_calls`、`metrics` | 暂不含 | `external_call` 表不存在 |
 | 依赖直接构造注入 | 构造注入 + 工厂映射表 | Runner 需要按名字统一构造 |
+| Tool 不做重试决策，retryable 映射由调用方维护 | 瞬时故障由 Tool 内 `retry_async` 有限次重试，耗尽后抛 `ToolError` | 哪些失败是瞬时的只有 Tool 清楚 |
 
 ## 验收标准
 
