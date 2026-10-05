@@ -12,11 +12,18 @@ import {
   type ScriptTemplateFields,
 } from '../api'
 
+/** 传入 id 时以抽屉形式嵌入列表页（null 表示新建），保存与取消交给父组件处理 */
+const props = defineProps<{ id?: number | null }>()
+const emit = defineEmits<{ (e: 'close'): void; (e: 'saved'): void }>()
+
 const route = useRoute()
 const router = useRouter()
 const session = useSessionStore()
 
-const templateId = computed(() => (route.params.id ? Number(route.params.id) : null))
+const inDrawer = computed(() => props.id !== undefined)
+const templateId = computed(() =>
+  inDrawer.value ? (props.id ?? null) : route.params.id ? Number(route.params.id) : null,
+)
 const createdBy = ref<number | null>(null)
 
 const isOwner = computed(() => {
@@ -68,7 +75,8 @@ async function submit(): Promise<void> {
     } else {
       await updateScriptTemplate(templateId.value, fields)
     }
-    await router.push('/tiktok_studio/script-templates')
+    if (inDrawer.value) emit('saved')
+    else await router.push('/tiktok_studio/script-templates')
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -78,11 +86,11 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <div class="form-container">
+  <div class="form-container" :class="{ 'in-drawer': inDrawer }">
     <!-- 面包屑与页头 -->
     <div class="form-header">
       <div class="header-titles">
-        <div class="breadcrumb">
+        <div v-if="!inDrawer" class="breadcrumb">
           <RouterLink to="/" class="breadcrumb-item">应用广场</RouterLink>
           <span class="breadcrumb-separator">/</span>
           <RouterLink to="/tiktok_studio/script-templates" class="breadcrumb-item">爆款视频脚本库</RouterLink>
@@ -99,7 +107,10 @@ async function submit(): Promise<void> {
       </div>
 
       <div class="header-actions">
-        <RouterLink to="/tiktok_studio/script-templates" class="btn-secondary">
+        <button v-if="inDrawer" type="button" class="btn-secondary" @click="emit('close')">
+          {{ editable ? '取消' : '关闭' }}
+        </button>
+        <RouterLink v-else to="/tiktok_studio/script-templates" class="btn-secondary">
           返回列表
         </RouterLink>
         <button
@@ -233,6 +244,15 @@ async function submit(): Promise<void> {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+}
+
+.in-drawer .form-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: 0 calc(-1 * var(--space-md));
+  border-width: 0 0 1px;
+  border-radius: 0;
 }
 
 .header-titles {

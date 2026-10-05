@@ -10,6 +10,7 @@ import {
   listScriptTemplates,
   type ScriptTemplateSummary,
 } from '../api'
+import ScriptTemplateFormView from './ScriptTemplateFormView.vue'
 
 const PAGE_SIZE = 20
 
@@ -25,12 +26,26 @@ const jumpInput = ref(1)
 const loading = ref(true)
 const initialLoaded = ref(false)
 const deletingId = ref<number | null>(null)
+/** 抽屉打开时 id 为 null 表示新建 */
+const drawer = ref<{ id: number | null } | null>(null)
 
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
 
 function isOwner(template: ScriptTemplateSummary): boolean {
   if (session.user?.superuser) return true
   return template.created_by !== null && template.created_by === session.user?.id
+}
+
+async function onDrawerSaved(): Promise<void> {
+  const created = drawer.value?.id === null
+  drawer.value = null
+  if (created) {
+    keywordInput.value = ''
+    keyword.value = ''
+    await load(1)
+  } else {
+    await load(page.value)
+  }
 }
 
 function search(): Promise<void> {
@@ -129,16 +144,17 @@ onMounted(() => load(1))
           <button type="submit" class="btn-search">搜索</button>
         </form>
 
-        <RouterLink
+        <button
           v-permission="'tiktok_studio:script_template:create'"
-          to="/tiktok_studio/script-templates/new"
+          type="button"
           class="btn-primary"
+          @click="drawer = { id: null }"
         >
           <svg viewBox="0 0 20 20" fill="currentColor" class="btn-icon">
             <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
           </svg>
           <span>新建脚本</span>
-        </RouterLink>
+        </button>
       </div>
     </div>
 
@@ -178,9 +194,9 @@ onMounted(() => load(1))
             <tr v-for="template in templates" :key="template.id">
               <td class="text-center font-mono text-weak">#{{ template.id }}</td>
               <td class="font-bold text-main">
-                <RouterLink :to="`/tiktok_studio/script-templates/${template.id}`" class="name-link">
+                <button type="button" class="name-link" @click="drawer = { id: template.id }">
                   {{ template.name }}
-                </RouterLink>
+                </button>
               </td>
               <td class="text-center">
                 <span class="badge-category">{{ CATEGORY_LABELS[template.category] || template.category }}</span>
@@ -225,13 +241,14 @@ onMounted(() => load(1))
               <td class="text-center text-weak text-sm">{{ new Date(template.updated_at).toLocaleString() }}</td>
               <td class="table-actions text-center">
                 <template v-if="isOwner(template)">
-                  <RouterLink
-                    :to="`/tiktok_studio/script-templates/${template.id}`"
+                  <button
+                    type="button"
                     class="action-link"
-                    :class="{ disabled: deletingId !== null }"
+                    :disabled="deletingId !== null"
+                    @click="drawer = { id: template.id }"
                   >
                     编辑
-                  </RouterLink>
+                  </button>
                   <button
                     type="button"
                     class="action-link danger"
@@ -242,13 +259,14 @@ onMounted(() => load(1))
                   </button>
                 </template>
                 <template v-else>
-                  <RouterLink
-                    :to="`/tiktok_studio/script-templates/${template.id}`"
+                  <button
+                    type="button"
                     class="action-link"
-                    :class="{ disabled: deletingId !== null }"
+                    :disabled="deletingId !== null"
+                    @click="drawer = { id: template.id }"
                   >
                     查看
-                  </RouterLink>
+                  </button>
                 </template>
               </td>
             </tr>
@@ -257,14 +275,15 @@ onMounted(() => load(1))
                 <div class="empty-wrap">
                   <span class="empty-icon-text">📄</span>
                   <p>{{ keyword ? '没有匹配的爆款脚本' : '当前暂无脚本模板' }}</p>
-                  <RouterLink
+                  <button
                     v-if="!keyword"
                     v-permission="'tiktok_studio:script_template:create'"
-                    to="/tiktok_studio/script-templates/new"
+                    type="button"
                     class="btn-primary btn-sm"
+                    @click="drawer = { id: null }"
                   >
                     新建第一个脚本
-                  </RouterLink>
+                  </button>
                 </div>
               </td>
             </tr>
@@ -308,6 +327,21 @@ onMounted(() => load(1))
         </form>
       </footer>
     </div>
+
+    <Teleport to="body">
+      <Transition name="drawer">
+        <div v-if="drawer" class="drawer-overlay" role="dialog" aria-modal="true">
+          <aside class="drawer-panel">
+            <ScriptTemplateFormView
+              :id="drawer.id"
+              :key="drawer.id ?? 'new'"
+              @close="drawer = null"
+              @saved="onDrawerSaved"
+            />
+          </aside>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -600,7 +634,12 @@ onMounted(() => load(1))
 }
 
 .name-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
   color: var(--color-text);
+  cursor: pointer;
   transition: color var(--transition-fast);
 }
 
@@ -840,5 +879,44 @@ onMounted(() => load(1))
   border-radius: var(--radius-sm);
   text-align: center;
   font-size: 12px;
+}
+
+/* 编辑抽屉 */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.drawer-panel {
+  width: min(960px, 100vw);
+  height: 100%;
+  overflow-y: auto;
+  padding: 0 var(--space-md) var(--space-md);
+  background: var(--color-bg, #f8fafc);
+  box-shadow: -12px 0 32px rgba(15, 23, 42, 0.18);
+}
+
+.drawer-enter-active,
+.drawer-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.drawer-enter-active .drawer-panel,
+.drawer-leave-active .drawer-panel {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.drawer-enter-from,
+.drawer-leave-to {
+  opacity: 0;
+}
+
+.drawer-enter-from .drawer-panel,
+.drawer-leave-to .drawer-panel {
+  transform: translateX(100%);
 }
 </style>
