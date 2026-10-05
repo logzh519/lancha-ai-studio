@@ -54,6 +54,17 @@ async def delete_script_template(session: AsyncSession, template: ScriptTemplate
     await session.flush()
 
 
+async def pick_script_template(session: AsyncSession, category: str) -> ScriptTemplate | None:
+    """从正式模板里随机取一条；候选池 = 全品类模板 + 指定类目的模板。"""
+    stmt = (
+        select(ScriptTemplate)
+        .where(ScriptTemplate.status == "formal", ScriptTemplate.category.in_(("all", category)))
+        .order_by(func.random())
+        .limit(1)
+    )
+    return (await session.execute(stmt)).scalars().first()
+
+
 async def list_product_masters(
     session: AsyncSession, offset: int, limit: int, keyword: str | None = None
 ) -> tuple[list[ProductMaster], int]:
