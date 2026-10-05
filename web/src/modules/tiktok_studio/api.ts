@@ -49,3 +49,53 @@ export const updateScriptTemplate = (id: number, fields: ScriptTemplateFields) =
   request<ScriptTemplate>(`${BASE}/${id}`, { method: 'PUT', body: JSON.stringify(fields) })
 
 export const deleteScriptTemplate = (id: number) => request<void>(`${BASE}/${id}`, { method: 'DELETE' })
+
+export interface ProductMasterFields {
+  sku: string
+  asin: string | null
+  color: string | null
+  store: string | null
+  pid: string | null
+  category: string | null
+  description: string | null
+  selling_points: string | null
+  main_image_url: string | null
+  sub_images: string[]
+  three_view_images: string[]
+  three_view_reference_images: string[]
+}
+
+export type ProductMasterSummary = Pick<
+  ProductMasterFields,
+  'sku' | 'asin' | 'color' | 'store' | 'pid' | 'category' | 'main_image_url'
+> & {
+  id: number
+  created_by: number | null
+  created_at: string
+  updated_at: string
+}
+
+export type ProductMaster = ProductMasterSummary & ProductMasterFields
+
+export interface ProductMasterPage {
+  items: ProductMasterSummary[]
+  total: number
+}
+
+const PRODUCT_BASE = '/tiktok_studio/product-masters'
+
+export const listProductMasters = (page: number, pageSize: number, keyword = '') => {
+  const query = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
+  if (keyword) query.set('keyword', keyword)
+  return request<ProductMasterPage>(`${PRODUCT_BASE}?${query}`)
+}
+
+export const getProductMaster = (id: number) => request<ProductMaster>(`${PRODUCT_BASE}/${id}`)
+
+export const createProductMaster = (fields: ProductMasterFields) =>
+  request<ProductMaster>(PRODUCT_BASE, { method: 'POST', body: JSON.stringify(fields) })
+
+export const updateProductMaster = (id: number, fields: ProductMasterFields) =>
+  request<ProductMaster>(`${PRODUCT_BASE}/${id}`, { method: 'PUT', body: JSON.stringify(fields) })
+
+export const deleteProductMaster = (id: number) => request<void>(`${PRODUCT_BASE}/${id}`, { method: 'DELETE' })

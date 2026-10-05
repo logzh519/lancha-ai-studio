@@ -13,6 +13,10 @@ MODULE = ModuleSpec(
         PermissionDef("tiktok_studio:script_template:create", "新建爆款脚本"),
         PermissionDef("tiktok_studio:script_template:update", "修改爆款脚本"),
         PermissionDef("tiktok_studio:script_template:delete", "删除爆款脚本"),
+        PermissionDef("tiktok_studio:product_master:view", "查看商品资产"),
+        PermissionDef("tiktok_studio:product_master:create", "新建商品资产"),
+        PermissionDef("tiktok_studio:product_master:update", "修改商品资产"),
+        PermissionDef("tiktok_studio:product_master:delete", "删除商品资产"),
     ),
     menus=(
         MenuDef(
@@ -21,6 +25,13 @@ MODULE = ModuleSpec(
             icon="list",
             order=30,
             permission="tiktok_studio:script_template:view",
+        ),
+        MenuDef(
+            "商品资产库",
+            "/tiktok_studio/product-masters",
+            icon="list",
+            order=31,
+            permission="tiktok_studio:product_master:view",
         ),
     ),
 )
