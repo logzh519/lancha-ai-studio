@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useSessionStore } from '@shared/core'
+import { confirmDialog } from '@shared/ui'
 import { computed, onMounted, ref } from 'vue'
 
 import {
@@ -23,6 +24,7 @@ const keyword = ref('')
 const jumpInput = ref(1)
 const loading = ref(true)
 const initialLoaded = ref(false)
+const deletingId = ref<number | null>(null)
 
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
 
@@ -64,13 +66,25 @@ async function load(target: number): Promise<void> {
 }
 
 async function remove(template: ScriptTemplateSummary): Promise<void> {
-  if (!isOwner(template)) return
-  if (!window.confirm(`确定删除「${template.name}」？删除后不可恢复。`)) return
+  if (!isOwner(template) || deletingId.value !== null) return
+  const confirmed = await confirmDialog({
+    title: '确认删除脚本',
+    message: `确定删除脚本模版「${template.name}」？删除后将无法恢复。`,
+    type: 'danger',
+    confirmText: '确定删除',
+    cancelText: '取消',
+  })
+  if (!confirmed) return
+  deletingId.value = template.id
   try {
     await deleteScriptTemplate(template.id)
+    templates.value = templates.value.filter((item) => item.id !== template.id)
+    total.value = Math.max(0, total.value - 1)
     await load(page.value)
   } catch (e) {
     error.value = (e as Error).message
+  } finally {
+    deletingId.value = null
   }
 }
 
@@ -214,21 +228,24 @@ onMounted(() => load(1))
                   <RouterLink
                     :to="`/tiktok/script-templates/${template.id}`"
                     class="action-link"
+                    :class="{ disabled: deletingId !== null }"
                   >
                     编辑
                   </RouterLink>
                   <button
                     type="button"
                     class="action-link danger"
+                    :disabled="deletingId !== null"
                     @click="remove(template)"
                   >
-                    删除
+                    {{ deletingId === template.id ? '删除中...' : '删除' }}
                   </button>
                 </template>
                 <template v-else>
                   <RouterLink
                     :to="`/tiktok/script-templates/${template.id}`"
                     class="action-link"
+                    :class="{ disabled: deletingId !== null }"
                   >
                     查看
                   </RouterLink>

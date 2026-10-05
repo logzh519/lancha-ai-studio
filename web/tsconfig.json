@@ -17,6 +17,7 @@
     "baseUrl": ".",
     "paths": {
       "@shared/*": ["src/shared/*"],
+      "@shared/ui": ["src/shared/ui/index.ts"],
       "@shell/*": ["src/shell/*"]
     }
   },

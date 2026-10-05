@@ -81,6 +81,7 @@ async def create_script_template(
     session: AsyncSession = Depends(get_session),
 ):
     template = await service.create_script_template(session, payload, created_by=principal.user_id)
+    await session.commit()
     return ScriptTemplateOut.model_validate(template, from_attributes=True)
 
 
@@ -93,6 +94,7 @@ async def update_script_template(
     template_id: int, payload: ScriptTemplateFields, session: AsyncSession = Depends(get_session)
 ):
     template = await service.update_script_template(session, await _get_or_404(session, template_id), payload)
+    await session.commit()
     return ScriptTemplateOut.model_validate(template, from_attributes=True)
 
 
@@ -103,3 +105,4 @@ async def update_script_template(
 )
 async def delete_script_template(template_id: int, session: AsyncSession = Depends(get_session)):
     await service.delete_script_template(session, await _get_or_404(session, template_id))
+    await session.commit()
