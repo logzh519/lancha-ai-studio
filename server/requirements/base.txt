@@ -5,6 +5,12 @@ pydantic-settings == 2.15.0
 python-dotenv == 1.2.3
 httpx >= 0.28
 
+openai >= 1.60
+anthropic >= 0.90
+
+tos >= 2.9.3
+esdk-obs-python >= 3.26.6
+
 sqlalchemy[asyncio] >= 2.1
 psycopg[binary] >= 3.3
 alembic >= 1.20

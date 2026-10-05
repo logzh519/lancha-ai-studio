@@ -48,6 +48,36 @@ class Settings(BaseSettings):
     # worker 事件循环看门狗阈值（秒）：循环阻塞超过该值即打印堆栈并退出进程，交给 compose 重启
     worker_watchdog_timeout: float = 60.0
 
+    # LLM：阿里百炼（同时提供 OpenAI / Anthropic 兼容端点）
+    ali_api_key: str = ""
+    ali_openai_base_url: str = "https://ws-gx6i1hxncyjd07yu.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+    ali_anthropic_base_url: str = "https://ws-gx6i1hxncyjd07yu.cn-beijing.maas.aliyuncs.com/apps/anthropic"
+    ali_test_llm_model: str = "deepseek-v4.1-flash"
+
+    # LLM：朗驰中转（仅 OpenAI 兼容）
+    lch_api_key: str = ""
+    lch_openai_base_url: str = "https://ai.gwroute.site"
+    lch_llm_model: str = "gpt-5.6-sol"
+    lch_image_model: str = "gpt-image-2"
+
+    # 默认对象存储服务：tos / obs，留空则使用 tos
+    storage_provider: str = "tos"
+
+    # 火山引擎 TOS
+    tos_endpoint: str = ""
+    tos_access_key_id: str = ""
+    tos_secret_access_key: str = ""
+    tos_bucket_name: str = ""
+    tos_region: str = "cn-beijing"
+    tos_default_acl: str = "private"    # 上传对象的默认 ACL：private / public-read / public-read-write 等
+
+    # 华为云 OBS
+    obs_endpoint: str = ""              # 如 obs.cn-south-1.myhuaweicloud.com，须与 bucket 所在区域一致
+    obs_access_key_id: str = ""
+    obs_secret_access_key: str = ""
+    obs_bucket_name: str = ""
+    obs_default_acl: str = "private"    # 上传对象的默认 ACL：private / public-read / public-read-write 等
+
     @field_validator("cors_origins", "enabled_modules", mode="before")
     @classmethod
     def _split_csv(cls, value):
